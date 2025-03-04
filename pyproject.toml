@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "myabcm_corporate_client_api"
+
+version = "0.1.1"
+
+authors = [
+    { name="Clovis Ribeiro", email="clovis.ribeiro@myabcm.com" },
+	{ name="Luiz Guilherme Oliveira", email="luiz.oliveira@myabcm.com" }]
+	
+description = "MyABCM Corporate Python Client API"
+
+readme = "README.md"
+
+requires-python = ">=3.8"
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)"]
+
+license = { text= "LGPL-3.0-only" }
+
+dependencies = [
+    "requests"]
+
+[project.urls]
+Homepage = "https://www.myabcm.com"
+Repository = "https://github.com/myabcm/corporate-python-client-api"
