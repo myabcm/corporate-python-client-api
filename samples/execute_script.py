@@ -1,7 +1,7 @@
 import os
 import sys
 import json
-#from myabcm_corporate_client_api import CorporateServer
+from myabcm_corporate_client_api import CorporateServer
 
 # --------------------------------------------------------------------------------------
 # This sample uses the myabcm_corporate_client_api package from Python Package index.
@@ -9,11 +9,11 @@ import json
 # COMMENT the line above importing CorporateSever from myabcm_corporate_client_api
 # and UNCOMMENT the 5 lines below
 # --------------------------------------------------------------------------------------
-import platform
-module_dir = os.path.abspath("../src/myabcm_corporate_client_api")
-if module_dir not in sys.path:
-    sys.path.append(module_dir)
-from corporate_server_module import CorporateServer
+#import platform
+#module_dir = os.path.abspath("../src/myabcm_corporate_client_api")
+#if module_dir not in sys.path:
+#    sys.path.append(module_dir)
+#from corporate_server_module import CorporateServer
 
 # Variables used in the script
 model_reference =  "MDL-TEST-MODEL-PYTHON-TEST"
