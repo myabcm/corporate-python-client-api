@@ -858,7 +858,7 @@ class CorporateServer:
         # Check response
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error adding import {parameters.get("Name")} (Status code: {response.status_code}. Text: {response.text})")
+            raise Exception(f"Error adding import {parameters.get('Name')} (Status code: {response.status_code}. Text: {response.text})")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1721,7 +1721,7 @@ class CorporateServer:
         # Check response
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error adding export {parameters.get("Name")} (Status code: {response.status_code}. Text: {response.text})")
+            raise Exception(f"Error adding export {parameters.get('Name')} (Status code: {response.status_code}. Text: {response.text})")
         else:
             if self.__console_feedback: print("ok")
 
