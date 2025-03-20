@@ -317,7 +317,7 @@ class CorporateServer:
     def __get_available_associations(self):
         # Set URL & parameters
         url = self.__base_url + "/v1/modeling/models/available-associations"
-        params = { "modelid" : self.__selected_model_id }
+        params = { "modelId" : self.__selected_model_id }
 
         # Make GET request
         response = requests.get(url, params=params, headers=self.__get_default_headers())
@@ -346,7 +346,7 @@ class CorporateServer:
     def __wait_for_operation_to_finish(self, operation_id):
         # Set URL & parameters
         url = f"{self.__base_url}/v1/base/operations/{operation_id}/status"
-        params = { "cultureinfo" : "en-US" }
+        params = { "cultureInfo" : "en-US" }
 
         # Setup helper variables to display our "visual progress indicator"
         signs = ["-", "\\", "|", "/",  "-",  "\\",  "|",  "/"]
@@ -1792,3 +1792,64 @@ class CorporateServer:
         self.__wait_for_operation_to_finish(operation_id)
 
         if self.__console_feedback: print("ok");
+
+    def scenario_builder(self, src_period_reference, src_scenario_reference, dst_period_reference, dst_scenario_reference, remove_destination_association_before_starting, parameters=None):
+        """Execute scenario builder
+            Parameters:
+            src_period_reference (string): Reference of the source period
+            src_scenario_reference (string): Reference of the source scenario
+            dst_period_reference (string): Reference of the source period
+            dst_scenario_reference (string): Reference of the source scenario
+            remove_destination_association_before_starting (bool): Recreate destination association before starting
+            parameters (json): JSON with all parameters
+
+            Returns:
+            Nothing if scenario_builder succeeds
+        """
+
+        if self.__console_feedback: print("Executing scenario builder...", end="")
+
+        # Initialized the parameters to an empty dictionary if it was not informed (None)
+        if parameters is None:
+            parameters = {}
+
+        # Get association ids
+        src_association_id = self.__get_association_id(src_period_reference, src_scenario_reference)
+        dst_association_id = self.__get_association_id(dst_period_reference, dst_scenario_reference)
+
+        # Set URL & parameters
+        url = self.__base_url + "/v1/modeling/models/selected/create-scenario"
+        body = {"SourcePeriodScenarioId": src_association_id,
+                "DestinationPeriodScenarioId": dst_association_id,
+                "CopyAssignments": parameters.get("CopyAssignments") if parameters.get("CopyAssignments") is not None else True,
+                "IncludeDriverQuantity": parameters.get("IncludeDriverQuantity") if parameters.get("IncludeDriverQuantity") is not None else True,
+                "CopyOnlyDriverId": -1,
+                "CopyAttributes": parameters.get("CopyAttributes") if parameters.get("CopyAttributes") is not None else True,
+                "IncludeAttributeQuantity": parameters.get("IncludeAttributeQuantity") if parameters.get("IncludeAttributeQuantity") is not None else True,
+                "CopyOnlyAttributeId": -1,
+                "EnteredCost": parameters.get("EnteredCost") if parameters.get("EnteredCost") is not None else True,
+                "OutputQuantity": parameters.get("OutputQuantity") if parameters.get("OutputQuantity") is not None else True,
+                "Revenue": parameters.get("Revenue") if parameters.get("Revenue") is not None else True,
+                "AssignmentsFactor": parameters.get("AssignmentsFactor") if parameters.get("AssignmentsFactor") is not None else 1,
+                "AttributesFactor": parameters.get("AttributesFactor") if parameters.get("AttributesFactor") is not None else 1,
+                "EnteredCostFactor": parameters.get("EnteredCostFactor") if parameters.get("EnteredCostFactor") is not None else 1,
+                "OutputQuantityFactor": parameters.get("OutputQuantityFactor") if parameters.get("OutputQuantityFactor") is not None else 1,
+                "RevenueFactor": parameters.get("RevenueFactor") if parameters.get("RevenueFactor") is not None else 1,
+                "OperationType": parameters.get("OperationType") if parameters.get("OperationType") is not None else 1
+                }
+
+        # Make POST request
+        response = requests.post(url, json=body, headers=self.__get_default_headers())
+
+        # Check response
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed")
+            raise Exception(f"Error starting scenario builder (Status code: {response.status_code})")
+
+        # Read operation id (that is returned in response.text)
+        operation_id = response.text
+
+        # Wait for operation to finish
+        self.__wait_for_operation_to_finish(operation_id)
+
+        if self.__console_feedback: print("ok")

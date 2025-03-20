@@ -79,6 +79,7 @@ add_model | Add a new model
 calculate_model | Calculate a specific association
 reset_association | Reset an existing association
 remove_cubes_from_olap_server | Remove ALL cubes from OLAP Server (tabular and SSAS)
+scenario_builder | Execute scenario builder
 
 &nbsp;  
 &nbsp;  
