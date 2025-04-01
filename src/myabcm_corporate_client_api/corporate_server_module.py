@@ -529,7 +529,7 @@ class CorporateServer:
             Parameters:
             name (string): Name of the model
             reference (string): Reference of the model
-            description (string): Descriptoon of the model
+            description (string): Description of the model
             audit_level (int): Audit level. Possible values are: 0 (for Disabled), 1 (for Basic), 2 (for Intermediate) or (3 for Complete)
 
             Returns:
@@ -933,7 +933,7 @@ class CorporateServer:
             Parameters:
             name (string): Name of the script
             reference (string): Reference of the script
-            description (string): Descriptoon of the script
+            description (string): Description of the script
 
             Returns:
             Nothing if script is created or an Exception if it fails for any reason
