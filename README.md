@@ -40,7 +40,7 @@ corporate_server.logon()
 corporate_server.select_model("MY-MODEL-REFERENCE-ABC")
 
 # Execute calculation
-corporate_server.calculate_model("JAN2025", "ACTUAL" , False):
+corporate_server.calculate_model("JAN2025", "ACTUAL" , False)
 
 # Logoff from MyABCM Corporate
 corporate_server.logoff()
