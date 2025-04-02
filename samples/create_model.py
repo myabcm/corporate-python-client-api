@@ -1,8 +1,6 @@
-import os
 import sys
 import json
 from myabcm_corporate_client_api import CorporateServer
-
 # --------------------------------------------------------------------------------------
 # This sample uses the myabcm_corporate_client_api package from Python Package index.
 # If you want to use the source code of the package direcly for debugging/improving it,
@@ -17,9 +15,9 @@ from myabcm_corporate_client_api import CorporateServer
 #from corporate_server_module import CorporateServer
 
 # Variables used in the execute_script
-model_name =  "Test Model (Python test)"
-model_reference =  "MDL-TEST-MODEL-PYTHON-TEST"
-model_description =  "My Test Model created from a Python script"
+model_name        = "My Sample Model (test)"
+model_reference   = "MDL-SAMPLE"
+model_description = "My Sample Model description (test)"
 
 try:
     # Read credentials from disk (credentials.json)

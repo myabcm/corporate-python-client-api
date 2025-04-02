@@ -1,5 +1,4 @@
 import os
-import sys
 import json
 from myabcm_corporate_client_api import CorporateServer
 # --------------------------------------------------------------------------------------
@@ -14,55 +13,68 @@ from myabcm_corporate_client_api import CorporateServer
 #    sys.path.append(module_dir)
 #from corporate_server_module import CorporateServer
 
-# Variables used in the script
-file_path = f"{os.path.abspath("./")}\\"
-file_name = "demo_model.etlx"
-file_type = 2
-
-model_name        = "My Sample Model (test)"
-model_reference   = "MDL-SAMPLE"
-model_description = "My Sample Model description (test)"
-
 try:
     # Read credentials from disk (credentials.json)
     with open('credentials.json', 'r', encoding='utf-8') as file:
         credentials = json.load(file)
 
-    # Create CorporateServer object
-    corporate_server = CorporateServer(credentials.get("server"), credentials.get("username"), credentials.get("password"))
+    # declare help variables
+    etlx_full_filename = "D:/dev/corporate-python-client-api/samples/demo_model.etlx"
+    etlx_filename_only = os.path.basename(etlx_full_filename)
 
-    # Logon to MyABCM Corporate
+    model_name        = "My Sample Model (test)"
+    model_reference   = "MDL-SAMPLE"
+    model_description = "My Sample Model description (test)"
+
+    # create corporate server object and logon
+    corporate_server = CorporateServer(credentials.get("server"), credentials.get("username"), credentials.get("password"))
     corporate_server.logon()
 
-    # Upload file to server (if it is not already there)
-    if not corporate_server.file_exists(file_name):
-        corporate_server.upload_file(file_path + file_name, file_type, True)
+    # check if etlxfile alsready exis in file store and upload it again if needed
+    if corporate_server.file_exists(etlx_filename_only):
+        user_input = input(f"File {etlx_filename_only} already exists. Do you want to replace it (y/n)?").strip().lower()
 
-    # Check if model exists
-    if corporate_server.model_exists(model_reference):
-        # A model with the same reference already exists, check with user if we should replace it
-        response = input(f"Model using reference {model_reference} already exists. Do you want to replace it? (y/n)").strip().lower()
-        if response == 'y':
-            # Remove existing model
-            corporate_server.remove_model(model_reference)
+        if user_input == "y":
+            print(f"Current file {etlx_filename_only} will be removed and uploaded again")
+            corporate_server.remove_file(etlx_filename_only)
+            corporate_server.upload_file(etlx_full_filename, 2, True)
+
+        elif  user_input == "n":
+            print(f"Current file {etlx_filename_only} will be used")
+
         else:
-            # Cancel the script
-            print("Script cancelled.")
-            sys.exit()
+            print("Invalid response. You must type y or n. Cancelling script")
+            quit()
 
-    # Create a new model
-    corporate_server.add_model(model_name, model_reference, model_description, 0)
+    # check if model exists and if so, check if user really wants to proceed by replacing it
+    if corporate_server.model_exists(model_reference):
+        user_input = input(f"Model {model_reference} already exists. Do you want to replace it (y/n)?").strip().lower()
 
-    # Select the new model
+        if user_input == "y":
+            print(f"Current model {model_reference} will be removed and recreated")
+            corporate_server.remove_model(model_reference)
+
+        elif  user_input == "n":
+            print(f"Cancelling script")
+            quit()
+
+        else:
+            print("Invalid response. You must type y or n. Cancelling script")
+            quit()
+
+    # create new model
+    corporate_server.add_model(model_name,  model_reference, model_description, 0)
+
+    # select new model
     corporate_server.select_model(model_reference)
 
-    # Add a new import
+    # create a new import
     corporate_server.add_import({
         "Name": "Import All",
         "Reference": "IMP-IA",
         "Description": "Import All description",
         "DataSourceType": 5, # ETLX
-        "DataSourceParameter": file_name,
+        "DataSourceParameter": etlx_filename_only,
         "Dimensions": "CIMP_DIMENSIONS",
         "DimensionMembers": "CIMP_DIM_MEMBERS",
         "Modules": "CIMP_MODULES",
@@ -79,15 +91,19 @@ try:
         "MemberInstances": "CIMP_MEMBER_INSTANCES",
         "Assignments": "CIMP_MEMBER_INST_ASSIGNMENTS",
         "AttributeInstances": "CIMP_MEMBER_INST_ATTRIBUTES",
-        "AdditionalTables": True})
+        "AdditionalTables": True
+    })
 
-    # Execute import
+    # execute the import
     corporate_server.execute_import("IMP-IA")
 
-    # Remove import just created and executed
+    # execute the script  "Script01" that should have been imported with the model
+    corporate_server.execute_script("Script01")
+
+    # remove the import (as it is not necessary anymore)
     corporate_server.remove_import("IMP-IA")
 
-    # Logoff from server
+    # logoff from server
     corporate_server.logoff()
 
 except Exception as e:

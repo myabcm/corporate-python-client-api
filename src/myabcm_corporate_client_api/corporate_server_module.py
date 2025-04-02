@@ -530,7 +530,7 @@ class CorporateServer:
             name (string): Name of the model
             reference (string): Reference of the model
             description (string): Description of the model
-            audit_level (int): Audit level. Possible values are: 0 (for Disabled), 1 (for Basic), 2 (for Intermediate) or (3 for Complete)
+            audit_level (int): Audit level. Possible values are: 0 (for Disabled), 1 (for Basic), 2 (for Intermediate) or 3 (for Complete)
 
             Returns:
             Nothing if model is created or an Exception if it fails for any reason
@@ -1452,7 +1452,7 @@ class CorporateServer:
         """Process fact (this function is synchronous and will wait for the fact to be procesed)
 
             Parameters:
-            fact_reference (string): Reference of the factr
+            fact_reference (string): Reference of the fact
 
             Returns:
             Nothing if fact is processed or an Exception if it fails for any reason
