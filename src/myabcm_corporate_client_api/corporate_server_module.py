@@ -696,6 +696,35 @@ class CorporateServer:
             else:
                 if self.__console_feedback: print("ok")
 
+    def download_file(self, file_name, local_file_name):
+        """Download file from the server
+
+        Parameters:
+        file_name (string): Name of the file to be downloaded
+
+        Returns:
+        File requested or an Exception if it fails for any reason
+        """
+        if self.__console_feedback: print(f"Dowloading file {file_name}...", end="")
+
+        # Get the ID of the file to be downloaded (assuming here the current logged user is the file ownwer)
+        file_id = self.__get_file_id(file_name)
+
+        # Set URL
+        url = self.__base_url + f"/v1/base/files/{file_id}/download"
+
+        # Make GET request
+        response = requests.get(url, headers=self.__get_default_headers())
+
+        # Check response
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed")
+            raise Exception(f"Failed to download {file_name}. Status code: {response.status_code}")
+        else:
+            with open(local_file_name, "wb") as file:
+                file.write(response.content)
+            if self.__console_feedback: print("ok")
+
     def remove_file(self, file_name):
         """Remove file from server
 

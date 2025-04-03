@@ -46,6 +46,14 @@ corporate_server.calculate_model("JAN2025", "ACTUAL" , False)
 corporate_server.logoff()
 ```
 
+&nbsp;
+&nbsp;
+
+> This python package is designed to connect to the version **v1** of the server API, so when you inform the API URL, you must not inform the API version (as it is already embeeded inside the Python code). If just for example, the "API URL" returned by **Abm.Server.WEB.Shell.exe LIST_PARAMETERS** returns ***myabcm.mycompany.com/v1***, you should use ***myabcm,mycompany.com*** without the ***v1***   
+
+&nbsp;
+&nbsp;
+
 ## Methods provided by the CorporateServer class
 
 Here are all methods exposed by the CorporateServer class. Additional details on the parameters required for each method can be obtained directly from most Python code editors as the source code of the package is fully documented using *Docstrings*.
