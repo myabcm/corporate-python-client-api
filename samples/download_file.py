@@ -17,7 +17,7 @@ from myabcm_corporate_client_api import CorporateServer
 
 # Variables used in the execute_script
 remote_file_name = "demo_model.etlx"
-local_file_name  = "d:/demo_model.etlx"
+local_file_name  = "d:"
 
 try:
     # Read credentials from disk (credentials.json)

@@ -696,11 +696,12 @@ class CorporateServer:
             else:
                 if self.__console_feedback: print("ok")
 
-    def download_file(self, file_name, local_file_name):
+    def download_file(self, file_name, local_path):
         """Download file from the server
 
         Parameters:
         file_name (string): Name of the file to be downloaded
+        local_path (string): Path where to save the file
 
         Returns:
         File requested or an Exception if it fails for any reason
@@ -721,7 +722,7 @@ class CorporateServer:
             if self.__console_feedback: print("failed")
             raise Exception(f"Failed to download {file_name}. Status code: {response.status_code}")
         else:
-            with open(local_file_name, "wb") as file:
+            with open(f"{local_path}\\{file_name}", "wb") as file:
                 file.write(response.content)
             if self.__console_feedback: print("ok")
 
