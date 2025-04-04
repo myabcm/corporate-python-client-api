@@ -1828,8 +1828,8 @@ class CorporateServer:
             Parameters:
             src_period_reference (string): Reference of the source period
             src_scenario_reference (string): Reference of the source scenario
-            dst_period_reference (string): Reference of the source period
-            dst_scenario_reference (string): Reference of the source scenario
+            dst_period_reference (string): Reference of the destination period
+            dst_scenario_reference (string): Reference of the destination scenario
             remove_destination_association_before_starting (bool): Recreate destination association before starting
             parameters (json): JSON with all parameters
 
