@@ -17,6 +17,8 @@ OPERATION_ABORTED = 4
 
 SEPARATOR_CONSTANT = "\r\r\r\n\r\r\r"
 
+API_VERSION =  "v2"
+
 # --------------------------------------------------------------------------------------
 # CorporateServer class
 
@@ -53,7 +55,7 @@ class CorporateServer:
 
     def __get_models(self):
         # Set URL
-        url = self.__base_url + "/v1/modeling/models"
+        url = f"{self.__base_url}/{API_VERSION}/modeling/models"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
@@ -91,7 +93,7 @@ class CorporateServer:
 
     def __get_export_templates(self):
         # Set URL
-        url = self.__base_url + "/v1/base/export-templates"
+        url = f"{self.__base_url}/{API_VERSION}/base/export-templates"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
@@ -117,7 +119,7 @@ class CorporateServer:
 
     def __get_imports(self):
         # Set URL
-        url = self.__base_url + "/v1/integration/imports"
+        url = f"{self.__base_url}/{API_VERSION}/integration/imports"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
@@ -144,7 +146,7 @@ class CorporateServer:
 
     def __get_exports(self):
         # Set URL
-        url = self.__base_url + "/v1/integration/exports"
+        url = f"{self.__base_url}/{API_VERSION}/integration/exports"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
@@ -171,7 +173,7 @@ class CorporateServer:
 
     def __get_scripts(self):
         # Set URL
-        url = self.__base_url + "/v1/integration/scripts"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
@@ -198,7 +200,7 @@ class CorporateServer:
 
     def __get_cubes(self):
         # Set URL
-        url = self.__base_url + "/v1/analysis/cubes"
+        url = f"{self.__base_url}/{API_VERSION}/analysis/cubes"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
@@ -225,7 +227,7 @@ class CorporateServer:
 
     def __get_facts(self):
         # Set URL
-        url = self.__base_url + "/v1/analysis/facts"
+        url = f"{self.__base_url}/{API_VERSION}/analysis/facts"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
@@ -268,7 +270,7 @@ class CorporateServer:
 
     def __get_files(self):
         # Set URL & parameters (passing fileType = -1 to get all files)
-        url = self.__base_url + "/v1/base/files"
+        url = f"{self.__base_url}/{API_VERSION}/base/files"
         params = { "fileType": -1 }
 
         # Make GET request
@@ -298,7 +300,7 @@ class CorporateServer:
 
     def __store_logged_user_details(self):
         # Set URL
-        url = f"{self.__base_url}/v1/base/users/logged/profile"
+        url = f"{self.__base_url}/{API_VERSION}/base/users/logged/profile"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
@@ -316,7 +318,7 @@ class CorporateServer:
 
     def __get_available_associations(self):
         # Set URL & parameters
-        url = self.__base_url + "/v1/modeling/models/available-associations"
+        url = f"{self.__base_url}/{API_VERSION}/modeling/models/available-associations"
         params = { "modelId" : self.__selected_model_id }
 
         # Make GET request
@@ -345,7 +347,7 @@ class CorporateServer:
 
     def __wait_for_operation_to_finish(self, operation_id):
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/base/operations/{operation_id}/status"
+        url = f"{self.__base_url}/{API_VERSION}/base/operations/{operation_id}/status"
         params = { "cultureInfo" : "en-US" }
 
         # Setup helper variables to display our "visual progress indicator"
@@ -383,7 +385,7 @@ class CorporateServer:
 
     def __get_script_operations_in_group(self, group_id):
         # Set URL & parameters
-        url = self.__base_url + "/v1/base/operations/in-group"
+        url = f"{self.__base_url}/{API_VERSION}/base/operations/in-group"
         params = { "groupId" : group_id, "pending" : False, "cultureInfo": self.__default_idiom_id }
 
         # Make GET request
@@ -414,7 +416,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Logging on to {self.__base_url} using user {self.__login_name}...", end="")
 
         # Set URL & parameters
-        url = self.__base_url + "/v1/base/logon"
+        url = f"{self.__base_url}/{API_VERSION}/base/logon"
         body = {"Username": self.__login_name, "Password": self.__password, "ClientIPAddress": "127.0.0.1" }
 
         # Make POST request
@@ -458,7 +460,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Logging off from {self.__base_url} using user {self.__login_name}...", end="")
 
         # Set URL & parameters
-        url = self.__base_url + "/v1/base/logoff"
+        url = f"{self.__base_url}/{API_VERSION}/base/logoff"
         body = {"ClientIPAddress": "127.0.0.1"}
 
         # Make POST request
@@ -487,7 +489,7 @@ class CorporateServer:
         model_id = self.__get_model_id(reference)
 
         # Set URL & parameters
-        url = self.__base_url + "/v1/modeling/models/selected"
+        url = f"{self.__base_url}/{API_VERSION}/modeling/models/selected"
         body = {"ModelId": model_id}
 
         # Make GET request
@@ -538,7 +540,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Adding new model {name} ({reference})...", end="")
 
         # Set URL & parameters
-        url = self.__base_url + "/v1/modeling/models"
+        url = f"{self.__base_url}/{API_VERSION}/modeling/models"
         body = { "Name": name, "Reference": reference, "Description": description, "AuditLevel": audit_level, "OwnerId": self.__logged_user_id }
 
         # Make GET request
@@ -567,7 +569,7 @@ class CorporateServer:
         model_id = self.__get_model_id(reference)
 
         # Set URL & parameters
-        url = self.__base_url + "/v1/modeling/models"
+        url = f"{self.__base_url}/{API_VERSION}/modeling/models"
         params = { "ids" : model_id }
 
         # Make DELETE request
@@ -605,7 +607,7 @@ class CorporateServer:
         association_id = self.__get_association_id(period_reference, scenario_reference)
 
         # Set URL & parameters
-        url = self.__base_url + "/v1/modeling/models/selected/calculate"
+        url = f"{self.__base_url}/{API_VERSION}/modeling/models/selected/calculate"
         body = {"PeriodScenarioIds": [association_id],
                 "OperationDate":  CorporateServer.__get_current_utc_iso8601(),
                 "NotifyByEmail": notify_by_email
@@ -664,7 +666,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Uploading file {file_name}...", end="")
 
         # Set URL
-        url = self.__base_url + "/v1/base/files"
+        url = f"{self.__base_url}/{API_VERSION}/base/files"
 
         # Set header with authorization
         # We don't use the default header used in all ather calls as we do not
@@ -712,7 +714,7 @@ class CorporateServer:
         file_id = self.__get_file_id(file_name)
 
         # Set URL
-        url = self.__base_url + f"/v1/base/files/{file_id}/download"
+        url = f"{self.__base_url}/{API_VERSION}/base/files/{file_id}/download"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
@@ -744,7 +746,7 @@ class CorporateServer:
         file_id = self.__get_file_id(file_name)
 
         # Set URL & parameters
-        url = self.__base_url + "/v1/base/files"
+        url = f"{self.__base_url}/{API_VERSION}/base/files"
         params = { "ids": file_id }
 
         # Make DELETE request
@@ -836,7 +838,7 @@ class CorporateServer:
         # datasource_parameter with no further validation
 
         # Set URL & parameters(body)
-        url = self.__base_url + "/v1/integration/imports"
+        url = f"{self.__base_url}/{API_VERSION}/integration/imports"
         body = {
             "Name": parameters.get("Name"),
             "Reference": parameters.get("Reference"),
@@ -908,7 +910,7 @@ class CorporateServer:
         import_id = self.__get_import_id(reference)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/imports/{import_id}/execute"
+        url = f"{self.__base_url}/{API_VERSION}/integration/imports/{import_id}/execute"
         body = {"OperationDate":  CorporateServer.__get_current_utc_iso8601(),
                 "NotifyByEmail": True,
                 "IdiomId": idiom_id if idiom_id != -1 else self.__default_idiom_id,
@@ -945,7 +947,7 @@ class CorporateServer:
         import_id = self.__get_import_id(reference)
 
         # Set URL
-        url = self.__base_url + f"/v1/integration/imports/{import_id}"
+        url = f"{self.__base_url}/{API_VERSION}/integration/imports/{import_id}"
 
         # Make DELETE request
         response = requests.delete(url, headers=self.__get_default_headers())
@@ -971,7 +973,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Adding new script {name} ({reference})...", end="")
 
         # Set URL & parameters
-        url = self.__base_url + "/v1/integration/scripts"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts"
         body = { "Name": name, "Reference": reference, "Description": description }
 
         # Make GET request
@@ -1000,7 +1002,7 @@ class CorporateServer:
         script_id = self.__get_script_id(reference)
 
         # Set URL & parameters
-        url = self.__base_url + "/v1/integration/scripts"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts"
         params = { "ids" : script_id }
 
         # Make DELETE request
@@ -1034,7 +1036,8 @@ class CorporateServer:
         cube_id = self.__get_cube_id(cube_reference)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/scripts/{script_id}/operations"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
+
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
         body = { "Operations": [ { "OperationId": 0, "OperationType": 1, "Details": f"C={{{str(cube_id)}}} F={{{force_reprocessing}}}", "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
 
@@ -1076,7 +1079,8 @@ class CorporateServer:
         ps_ids = self.__get_association_list(period_scenario_list)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/scripts/{script_id}/operations"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
+
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
         body = { "Operations": [ { "OperationId": 0, "OperationType": 1, "Details": f"C={{{str(cube_id)}}} T={{{processing_type}}} A={{{ps_ids}}}", "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
 
@@ -1109,7 +1113,7 @@ class CorporateServer:
         export_id = self.__get_export_id(export_reference)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/scripts/{script_id}/operations"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
         body = { "Operations": [ { "OperationId": 0, "OperationType": 5, "Details": str(export_id), "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
 
@@ -1142,7 +1146,7 @@ class CorporateServer:
         import_id = self.__get_import_id(import_reference)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/scripts/{script_id}/operations"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
         body = { "Operations": [ { "OperationId": 0, "OperationType": 2, "Details": str(import_id), "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
 
@@ -1176,7 +1180,7 @@ class CorporateServer:
         ps_ids = self.__get_association_list(period_scenario_list)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/scripts/{script_id}/operations"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
         body = { "Operations": [ { "OperationId": 0, "OperationType": 0, "Details": ps_ids, "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
 
@@ -1210,7 +1214,7 @@ class CorporateServer:
         file_id = self.__get_file_id(etlx_filename)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/scripts/{script_id}/operations"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
         details =  "1" + SEPARATOR_CONSTANT + str(file_id) + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT +  "" + SEPARATOR_CONSTANT +  "False" + SEPARATOR_CONSTANT +  "" + SEPARATOR_CONSTANT +  "" + SEPARATOR_CONSTANT
 
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
@@ -1247,7 +1251,7 @@ class CorporateServer:
         script_id = self.__get_script_id(script_reference)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/scripts/{script_id}/operations"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
         details =  "2" + SEPARATOR_CONSTANT +  "0" + SEPARATOR_CONSTANT + server + SEPARATOR_CONSTANT +  database + SEPARATOR_CONSTANT +  str(integrated_security) + SEPARATOR_CONSTANT +  username + SEPARATOR_CONSTANT +  password + SEPARATOR_CONSTANT
 
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
@@ -1283,7 +1287,7 @@ class CorporateServer:
         fact_id = self.__get_fact_id(fact_reference, True)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/scripts/{script_id}/operations"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
 
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
         body = { "Operations": [ { "OperationId": 0, "OperationType": 9, "Details": str(fact_id), "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
@@ -1316,7 +1320,7 @@ class CorporateServer:
         script_id = self.__get_script_id(reference)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/scripts/{script_id}/execute"
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/execute"
         body = {
             "DefaultAssociationId": -1,
             "ScriptParameters": [],
@@ -1384,7 +1388,7 @@ class CorporateServer:
         ps_ids_int_list = list(map(int, ps_ids.split(";")))
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/analysis/facts/{fact_id}/associations"
+        url = f"{self.__base_url}/{API_VERSION}/analysis/facts/{fact_id}/associations"
         body = {"AssociationIds": ps_ids_int_list}
 
         # Make POST request
@@ -1420,7 +1424,7 @@ class CorporateServer:
         ps_ids_int_list = list(map(int, ps_ids.split(";")))
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/analysis/facts/{fact_id}/associations"
+        url = f"{self.__base_url}/{API_VERSION}/analysis/facts/{fact_id}/associations"
         body = {"AssociationIds": ps_ids_int_list}
 
         # Make DELETE request
@@ -1459,7 +1463,7 @@ class CorporateServer:
         ps_ids_int_list = list(map(int, ps_ids.split(";")))
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/analysis/facts/{fact_id}/associations/execute"
+        url = f"{self.__base_url}/{API_VERSION}/analysis/facts/{fact_id}/associations/execute"
         body = { "AssociationIds": ps_ids_int_list,
                 "OperationDate": self.__get_current_utc_iso8601(),
                 "NotifyByEmail": False,
@@ -1493,7 +1497,7 @@ class CorporateServer:
         fact_id = self.__get_fact_id(fact_reference)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/analysis/facts/{fact_id}/execute"
+        url = f"{self.__base_url}/{API_VERSION}/analysis/facts/{fact_id}/execute"
         body = {"OperationDate": CorporateServer.__get_current_utc_iso8601(),
                 "NotifyByEmail": False,
                 "GroupIds": [],
@@ -1531,7 +1535,7 @@ class CorporateServer:
         cube_id = self.__get_cube_id(reference)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/analysis/cubes/{cube_id}/regular/execute"
+        url = f"{self.__base_url}/{API_VERSION}/analysis/cubes/{cube_id}/regular/execute"
         body = {"ForceReprocessing": force_reprocessing,
                 "OperationDate": CorporateServer.__get_current_utc_iso8601(),
                 "NotifyByEmail": False
@@ -1580,7 +1584,7 @@ class CorporateServer:
         ps_ids_int_list = [] if ps_ids == "" else list(map(int, ps_ids.split(";")))
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/analysis/cubes/{cube_id}/tabular/execute"
+        url = f"{self.__base_url}/{API_VERSION}/analysis/cubes/{cube_id}/tabular/execute"
         body = {
             "CubeProcessingType": cube_processing_type,
             "AssociationIds": ps_ids_int_list,
@@ -1624,7 +1628,7 @@ class CorporateServer:
         ps_id = self.__get_association_id(period_reference, scenario_reference)
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/modeling/models/selected/structure/associations/{ps_id}/reset"
+        url = f"{self.__base_url}/{API_VERSION}/modeling/models/selected/structure/associations/{ps_id}/reset"
         body = {"RemoveAssignments": parameters.get("RemoveAssignments") if parameters.get("RemoveAssignments") is not None else True,
                 "RemoveTextAttributeInstances": parameters.get("RemoveTextAttributeInstances") if parameters.get("RemoveTextAttributeInstances") is not None else True,
                 "RemoveNumericAttributeInstances": parameters.get("RemoveNumericAttributeInstances") if parameters.get("RemoveNumericAttributeInstances") is not None else True,
@@ -1656,7 +1660,7 @@ class CorporateServer:
         if self.__console_feedback: print("Removing cubes from OLAP server...", end="")
 
         # Set URL
-        url = self.__base_url + "/v1/analysis/cubes/olap-server"
+        url = f"{self.__base_url}/{API_VERSION}/analysis/cubes/olap-server"
 
         # Make DELETE request
         response = requests.delete(url, headers=self.__get_default_headers())
@@ -1732,7 +1736,7 @@ class CorporateServer:
         # datasource_parameter with no further validation
 
         # Set URL & parameters(body)
-        url = self.__base_url + "/v1/integration/exports"
+        url = f"{self.__base_url}/{API_VERSION}/integration/exports"
         body = {
             "Name": parameters.get("Name"),
             "Reference": parameters.get("Reference"),
@@ -1770,7 +1774,7 @@ class CorporateServer:
         export_id = self.__get_export_id(reference)
 
         # Set URL
-        url = self.__base_url + f"/v1/integration/exports/{export_id}"
+        url = f"{self.__base_url}/{API_VERSION}/integration/exports/{export_id}"
 
         # Make DELETE request
         response = requests.delete(url, headers=self.__get_default_headers())
@@ -1801,7 +1805,7 @@ class CorporateServer:
         parameter_values = parameters if parameters is not None else []
 
         # Set URL & parameters
-        url = f"{self.__base_url}/v1/integration/exports/{export_id}/execute"
+        url = f"{self.__base_url}/{API_VERSION}/integration/exports/{export_id}/execute"
         body = {"ParametersValue": parameter_values,
                 "OperationDate":  CorporateServer.__get_current_utc_iso8601(),
                 "NotifyByEmail": True,
@@ -1848,7 +1852,7 @@ class CorporateServer:
         dst_association_id = self.__get_association_id(dst_period_reference, dst_scenario_reference)
 
         # Set URL & parameters
-        url = self.__base_url + "/v1/modeling/models/selected/create-scenario"
+        url = f"{self.__base_url}/{API_VERSION}/modeling/models/selected/create-scenario"
         body = {"SourcePeriodScenarioId": src_association_id,
                 "DestinationPeriodScenarioId": dst_association_id,
                 "CopyAssignments": parameters.get("CopyAssignments") if parameters.get("CopyAssignments") is not None else True,
