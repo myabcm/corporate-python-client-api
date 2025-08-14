@@ -684,7 +684,7 @@ class CorporateServer:
             data = {
                 'chunkMetadata': f"{{\"FileName\": \"{os.path.basename(file_name)}\", \"Index\": 0, \"TotalCount\": 1, \"FileSize\": {str(os.path.getsize(file_name))}, \"FileType\": \"\", \"FileGuid\": \"{str(uuid.uuid4())}\"}}",
                 "FileType": file_type,
-                "ReplaceExisting": replace_existing,
+                "ReplaceExistingFile": replace_existing,
                 "FileStoreUserId": self.__logged_user_id
             }
 
