@@ -1709,8 +1709,8 @@ class CorporateServer:
         datasource_parameter = parameters.get("DataSourceParameter")
 
         # Validate datasource_type
-        if datasource_type < 0 or datasource_type > 7:
-            raise Exception("Invalid DataSourceType. Must be between 0 and 7")
+        if datasource_type < 0 or datasource_type == 6 or datasource_type == 7 or datasource_type > 8:
+            raise Exception("Invalid DataSourceType. Must be either 0, 1, 2, 3, 4, 5 or 8")
 
         # Validate datasource_parameter (based on datasource_type)
         if datasource_type == 0 or datasource_type == 1 or datasource_type == 5:
@@ -1720,19 +1720,7 @@ class CorporateServer:
             else:
                 raise Exception(f"File {datasource_parameter} not found in server for the current logged user")
 
-        elif datasource_type == 6:
-            # Parameter is a MODEL REFERENCE, so we have to get the model id
-            if self.__model_exists(datasource_parameter):
-                datasource_parameter = self.__get_model_id(datasource_parameter)
-            else:
-                raise Exception(f"Model {datasource_parameter} does not exist or it is not currently accessible for the current logged user")
-
-        elif datasource_type == 4:
-            # Parameter is a DataMap, datasource parameter is ignored in this
-            # case, so we set it to an empty string
-            datasource_parameter =  ""
-
-        # If datasource type is 2 (OLE DB), 3 (SQL Server) or 4 (Oracle), we just use the
+        # If datasource type is 2 (OLE DB), 3 (SQL Server), 4 (Oracle) or 8 (Shared Files), we just use the
         # datasource_parameter with no further validation
 
         # Set URL & parameters(body)
