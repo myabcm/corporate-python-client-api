@@ -1702,7 +1702,7 @@ class CorporateServer:
             raise Exception("Missing required property 'TableName'")
 
         # Get the export template id (if ExportTemplateName is informed)
-        export_template_id = self.__get_export_template_id(parameters.get("ExportTemplateName")) if parameters.get("ExportTemplateName") is not None else 0
+        export_template_id = self.__get_export_template_id(parameters.get("ExportTemplateName")) if parameters.get("ExportTemplateName") is not None else -1
 
         # Store DataSourceType and DataSourceParameter in our helper variables
         datasource_type = parameters.get("DataSourceType")
