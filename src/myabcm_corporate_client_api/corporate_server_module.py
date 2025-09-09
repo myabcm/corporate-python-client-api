@@ -811,8 +811,8 @@ class CorporateServer:
         datasource_parameter = parameters.get("DataSourceParameter")
 
         # Validate datasource_type
-        if datasource_type < 0 or datasource_type > 7:
-            raise Exception("Invalid DataSourceType. Must be between 0 and 7")
+        if datasource_type < 0 or datasource_type > 8:
+            raise Exception("Invalid DataSourceType. Must be between 0 and 8")
 
         # Validate datasource_parameter (based on datasource_type)
         if datasource_type == 0 or datasource_type == 1 or datasource_type == 5:
@@ -822,19 +822,19 @@ class CorporateServer:
             else:
                 raise Exception(f"File {datasource_parameter} not found in server for the current logged user")
 
-        elif datasource_type == 6:
-            # Parameter is a MODEL REFERENCE, so we have to get the model id
-            if self.__model_exists(datasource_parameter):
+        if datasource_type == 6:
+            # Parameter is reference of the source model, so get it
+            if self.model_exists(datasource_parameter):
                 datasource_parameter = self.__get_model_id(datasource_parameter)
             else:
-                raise Exception(f"Model {datasource_parameter} does not exist or it is not currently accessible for the current logged user")
+                raise Exception(f"Model {datasource_parameter} not found in server for the current logged user")
 
-        elif datasource_type == 4:
+        if datasource_type == 7:
             # Parameter is a DataMap, datasource parameter is ignored in this
             # case, so we set it to an empty string
             datasource_parameter =  ""
 
-        # If datasource type is 2 (OLE DB), 3 (SQL Server) or 4 (Oracle), we just use the
+        # If datasource type is 2 (OLE DB), 3 (SQL Server), 4 (Oracle) or 8 (SharedFile) we just use the
         # datasource_parameter with no further validation
 
         # Set URL & parameters(body)
@@ -1746,6 +1746,28 @@ class CorporateServer:
             raise Exception(f"Error adding export {parameters.get('Name')} (Status code: {response.status_code}. Text: {response.text})")
         else:
             if self.__console_feedback: print("ok")
+
+    def export_exists(self, reference):
+        """Check if export exists
+
+            Parameters:
+            reference (string): Reference of the export
+
+            Returns:
+            True if it exists, otherwise False
+        """
+        if self.__console_feedback: print(f"Checking if export exists {reference}...", end="")
+        # Get exports
+        exports = self.__get_exports()
+
+        # Search for desired export (and return True if found)
+        for exp in exports:
+            if exp['Reference'] == reference:
+                if self.__console_feedback: print("yes")
+                return True
+
+        if self.__console_feedback: print("no")
+        return False
 
     def remove_export(self, reference):
         """Remove an existing export
