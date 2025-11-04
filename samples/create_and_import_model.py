@@ -19,7 +19,7 @@ try:
         credentials = json.load(file)
 
     # declare help variables
-    etlx_full_filename = "D:/dev/corporate-python-client-api/samples/demo_model.etlx"
+    etlx_full_filename = f"{os.path.dirname(os.path.abspath(__file__))}\\demo_model.etlx"
     etlx_filename_only = os.path.basename(etlx_full_filename)
 
     model_name        = "My Sample Model (test)"
@@ -30,7 +30,7 @@ try:
     corporate_server = CorporateServer(credentials.get("server"), credentials.get("username"), credentials.get("password"))
     corporate_server.logon()
 
-    # check if etlxfile alsready exis in file store and upload it again if needed
+    # check if etlx file alsready exists in file store and upload it again if needed
     if corporate_server.file_exists(etlx_filename_only):
         user_input = input(f"File {etlx_filename_only} already exists. Do you want to replace it (y/n)?").strip().lower()
 
@@ -45,6 +45,8 @@ try:
         else:
             print("Invalid response. You must type y or n. Cancelling script")
             quit()
+    else:
+        corporate_server.upload_file(etlx_full_filename, 2, True)
 
     # check if model exists and if so, check if user really wants to proceed by replacing it
     if corporate_server.model_exists(model_reference):
