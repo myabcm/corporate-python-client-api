@@ -3,7 +3,7 @@
 
 ## Overview
 
-MyABCM Corporate (v12 or newer) provides a simple and extensive REST API for end users to connect and control MyABCM from other languages.
+MyABCM Corporate (v13 or newer) provides a simple and extensive REST API for end users to connect and control MyABCM from other languages.
 
 The purpose of this package is to simplify the usage of MyABCM Corporate REST API by wrapping the most common calls in a simple to use Python class.
 
