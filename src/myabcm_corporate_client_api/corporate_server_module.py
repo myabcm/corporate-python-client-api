@@ -1,8 +1,9 @@
-﻿import json
+import json
 import os
 import time
 import uuid
 from datetime import datetime
+from typing import List, Dict
 
 import requests
 
@@ -24,6 +25,7 @@ API_VERSION =  "v2"
 
 class CorporateServer:
     def __init__(self, base_url, login_name, password, console_feedback=True):
+        self.__instance_with_token = False
         self.__base_url = base_url
         self.__login_name = login_name
         self.__password = password
@@ -33,6 +35,13 @@ class CorporateServer:
         self.__selected_model_id = -1
         self.__default_idiom_id = 1
         self.__console_feedback = console_feedback
+
+    @classmethod
+    def instance_with_token(cls, base_url, token, console_feedback=True):
+        corporate_server = cls(base_url, "", "", console_feedback)
+        corporate_server.__session_token = token
+        corporate_server.__instance_with_token = True
+        return corporate_server
 
     @staticmethod
     def __status_code_ok(status_code):
@@ -197,6 +206,21 @@ class CorporateServer:
 
         # Script not found, generate exception
         raise Exception(f"Script {reference} not found")
+
+    def __get_script_operations(self, script_id):
+        # Set URL
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
+
+        # Make GET request
+        response = requests.get(url, headers=self.__get_default_headers())
+
+        # Check response
+        if CorporateServer.__status_code_ok(response.status_code):
+            # We got a JSON with the script operations list, just return it
+            data = response.json()
+            return data
+        else:
+            raise Exception(f"Error getting script operations (Status code: {response.status_code})")
 
     def __get_cubes(self):
         # Set URL
@@ -407,49 +431,144 @@ class CorporateServer:
         """
         return self.__session_token
 
+    def __get_idiom_id(self, idiom_code):
+        """Get idiom id by code
+
+            Parameters:
+            idiom_code (string): Idiom code (ex: en-US, pt-BR)
+
+            Returns:
+            int: Idiom id or -1 if not found
+        """
+        # Set URL
+        url = f"{self.__base_url}/{API_VERSION}/base/idioms"
+
+        # Make GET request
+        response = requests.get(url, headers=self.__get_default_headers())
+
+        # Parse response (casting the response to a List[Dict] so we can use it later
+        data: List[Dict] = response.json()
+
+        # Search for desired idiom (and return its Id if found)
+        found_id = next(
+            (item['Id'] for item in data if item.get('Code').upper() == idiom_code.upper()),
+            -1
+        )
+
+        return found_id
+
+    def __build_etl_details(self, etl_object_id):
+        """Build ETL operation details string from token
+
+            Parameters:
+            etl_object_id (string): ETL token (ex: "1;FILE.etlx" or "2;server;db;true;user;pass")
+
+            Returns:
+            string: Details string expected by server or None if token is invalid
+        """
+
+        # Break down the etl_object_id into an etl_params array
+        etl_params = etl_object_id.split(";")
+
+        # We should have more than 1 element in the array, if not, just return None
+        if len(etl_params) <= 1:
+            return None
+
+        # Remove possible leading/trailing spaces from the string
+        etl_type = etl_params[0].strip()
+
+        if etl_type == "1":
+            # ETL File (shared or server file)
+            if len(etl_params) < 2:
+                raise Exception(f"Invalid parameters '{etl_object_id}' to EtlPackage operation.")
+
+            file_name = etl_params[1].strip()
+            if file_name == "":
+                raise Exception(f"FileName parameter '{etl_object_id}' is invalid.")
+
+            is_shared_file = (len(etl_params) == 3 and etl_params[2].strip().upper() == "SHARED")
+
+            if is_shared_file:
+                etl_details = file_name
+            else:
+                etl_details = str(self.__get_file_id(file_name))
+
+            # Build details string expected by server
+            return (
+                    "1" + SEPARATOR_CONSTANT + etl_details + SEPARATOR_CONSTANT + "" +
+                    SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "False" + SEPARATOR_CONSTANT +
+                    "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT
+            )
+
+        if etl_type == "2":
+            # ETL Database
+            if len(etl_params) != 6:
+                raise Exception(f"Invalid parameters '{etl_object_id}' to EtlPackage operation.")
+
+            server_name = etl_params[1].strip()
+            database_name = etl_params[2].strip()
+            integrated_security = etl_params[3].strip()
+            user_name = etl_params[4].strip()
+            user_password = etl_params[5].strip()
+
+            # Build details string expected by server
+            return (
+                    "2" + SEPARATOR_CONSTANT + "0" + SEPARATOR_CONSTANT + server_name +
+                    SEPARATOR_CONSTANT + database_name + SEPARATOR_CONSTANT + integrated_security +
+                    SEPARATOR_CONSTANT + user_name + SEPARATOR_CONSTANT + user_password +
+                    SEPARATOR_CONSTANT
+            )
+
+        # Unsupported ETL type
+        return None
+
     def logon(self):
         """Logon to MyABCM Corporate using the credentials informed when creating the CorporateServer object
 
             Returns:
             Nothing if logon is sucessfull or an Exception if it fails for any reason
         """
-        if self.__console_feedback: print(f"Logging on to {self.__base_url} using user {self.__login_name}...", end="")
-
-        # Set URL & parameters
-        url = f"{self.__base_url}/{API_VERSION}/base/logon"
-        body = {"Username": self.__login_name, "Password": self.__password, "ClientIPAddress": "127.0.0.1" }
-
-        # Make POST request
-        response = requests.post(url, json=body)
-
-        # Check response
-        if CorporateServer.__status_code_ok(response.status_code):
-            data = response.json()
-            if data.get("Result") == 0:
-                # Login succesfull, store session token
-                self.__session_token = data.get("SessionToken")
-                # Store additional user details
-                self.__store_logged_user_details()
-
-                if self.__console_feedback: print("ok")
-            else:
-                if self.__console_feedback: print(f"failed")
-
-                # Login failed, generate custom exception based on result code
-                if data.get("Result") == 6: # PasswordExpired
-                    raise Exception("Error logging in (Password expired)")
-                if data.get("Result") == 7: # ProductNotAuthorized
-                    raise Exception("Error logging in (Product not authorized)")
-                if data.get("Result") == 8: # LicenseNotAvailable
-                    raise Exception("Error logging in (License not available)")
-                if data.get("Result") == 9: # UserNotAuthorized
-                    raise Exception("Error logging in (User not authorized expired)")
-
-                # Result code not in 6 to 9 range, generate generic exception with result code
-                raise Exception(f"Error logging in (Logon result code: {data.get('Result')})")
+        if self.__instance_with_token:
+            if self.__console_feedback: print(f"Logging on with token {self.__session_token}...", end="")
+            self.__store_logged_user_details()
         else:
-            # Something got wrong, generate exception with status code
-            raise Exception(f"Error logging in (Status code: {response.status_code})")
+            if self.__console_feedback: print(f"Logging on to {self.__base_url} using user {self.__login_name}...", end="")
+
+            # Set URL & parameters
+            url = f"{self.__base_url}/{API_VERSION}/base/logon"
+            body = {"Username": self.__login_name, "Password": self.__password, "ClientIPAddress": "127.0.0.1" }
+
+            # Make POST request
+            response = requests.post(url, json=body)
+
+            # Check response
+            if CorporateServer.__status_code_ok(response.status_code):
+                data = response.json()
+                if data.get("Result") == 0:
+                    # Login succesfull, store session token
+                    self.__session_token = data.get("SessionToken")
+                    # Store additional user details
+                    self.__store_logged_user_details()
+
+                    if self.__console_feedback: print("ok")
+                else:
+                    if self.__console_feedback: print(f"failed")
+
+                    # Login failed, generate custom exception based on result code
+                    if data.get("Result") == 6: # PasswordExpired
+                        raise Exception("Error logging in (Password expired)")
+                    if data.get("Result") == 7: # ProductNotAuthorized
+                        raise Exception("Error logging in (Product not authorized)")
+                    if data.get("Result") == 8: # LicenseNotAvailable
+                        raise Exception("Error logging in (License not available)")
+                    if data.get("Result") == 9: # UserNotAuthorized
+                        raise Exception("Error logging in (User not authorized expired)")
+
+                    # Result code not in 6 to 9 range, generate generic exception with result code
+                    raise Exception(f"Error logging in (Logon result code: {data.get('Result')})")
+            else:
+                # Something got wrong, generate exception with status code
+                raise Exception(f"Error logging in (Status code: {response.status_code})")
 
     def logoff(self):
         """Logoff from MyABCM Corporate
@@ -457,7 +576,10 @@ class CorporateServer:
             Returns:
             Nothing if logoff is sucessfull or an Exception if it fails for any reason
         """
-        if self.__console_feedback: print(f"Logging off from {self.__base_url} using user {self.__login_name}...", end="")
+        if self.__instance_with_token:
+            if self.__console_feedback: print(f"Logging off with token {self.__session_token} ...", end="")
+        else:
+            if self.__console_feedback: print(f"Logging off from {self.__base_url} using user {self.__login_name}...", end="")
 
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/base/logoff"
@@ -894,12 +1016,14 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def execute_import(self, reference, idiom_id=-1):
+    def execute_import(self, reference, notify_by_email, idiom_code, use_transaction):
         """Execute import (this function is synchronous and will wait for the imported to finish executing)
 
         Parameters:
         reference (string): Reference of the import
-        idiom_id (int): Id of the idiom to be used
+        notify_by_email (boolean): True for the user to be notified by email when the import ends or False for the user not to be notified
+        idiom_code (string): Code of the idiom to be used
+        use_transaction (boolean): True for using a transaction or False for not using a transaction
 
         Returns:
         Nothing if import is executed or an Exception if it fails for any reason
@@ -909,12 +1033,15 @@ class CorporateServer:
         # Get import id
         import_id = self.__get_import_id(reference)
 
+        #Get Idiom id
+        idiom_id = self.__get_idiom_id(idiom_code)
+
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/imports/{import_id}/execute"
         body = {"OperationDate":  CorporateServer.__get_current_utc_iso8601(),
-                "NotifyByEmail": True,
+                "NotifyByEmail": notify_by_email,
                 "IdiomId": idiom_id if idiom_id != -1 else self.__default_idiom_id,
-                "UseTransaction": True}
+                "UseTransaction": use_transaction}
 
         # Make POST request
         response = requests.post(url, json=body, headers=self.__get_default_headers())
@@ -1302,31 +1429,114 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def execute_script(self, reference, idiom_id=-1):
-        """Execute script (this function is executed synchronously ONLY if the script has 1 or more
+    def execute_script(self, reference, notify_by_email, idiom_code, period_scenario, parameters):
+        """Execute a script (this function is executed synchronously ONLY if the script has 1 or more
            operations that are not exports. If all operations in the script are exports, it will
            execute asynchronously)
 
             Parameters:
             reference (string): Reference of the script
-            idiom_id (int): Id of the idiom to be used
+            notify_by_email (boolean): Indicates if an email notification should be sent to the user after the script execution)
+            idiom_code (string): Code of the idiom to be used
+            period_scenario (string): reference of the default period / scenario (i.e.: JAN/ACTUAL)
+            parameters (array): string array with the script parameters for possible exports/etl packages
 
             Returns:
-            Nothing if script starts execution or an Exception if it fails for any reason
+            Nothing if a script starts execution or an Exception if it fails for any reason
         """
         if self.__console_feedback: print(f"Start script {reference}...", end="")
 
         # Get script id
         script_id = self.__get_script_id(reference)
 
+        #Get idiom id
+        idiom_id = self.__get_idiom_id(idiom_code)
+
+        # Prepare default association and script parameters
+        default_association_id = -1
+        script_parameters = []
+        script_parameter_tokens = parameters if parameters is not None else []
+
+        # Resolve default association from period/scenario
+        if period_scenario:
+            associations = self.__get_available_associations()
+            for association in associations:
+                period_ref = association.get("PeriodName")
+                scenario_ref = association.get("ScenarioName")
+                if f"{period_ref}/{scenario_ref}".upper() == period_scenario.upper():
+                    default_association_id = association.get("Id", -1)
+                    break
+
+        # Build ScriptParameters for each token
+        if script_parameter_tokens:
+            # Get script operations
+            script_operation_list = self.__get_script_operations(script_id)
+
+            if len(script_operation_list) == 0:
+                raise Exception(f"Script '{reference}' does not have any operation to execute.")
+
+            # Parse each token and match with script operations
+            for token in script_parameter_tokens:
+                token_params = token.split("|")
+                object_id = token_params[0]
+                token_params = token_params[1:]
+                object_found = False
+                etl_details = None
+                etl_details_checked = False
+                is_etl_token = ".etlx" in object_id.lower()
+
+                for operation in script_operation_list:
+                    operation_type = operation.get("OperationType")
+                    operation_id = operation.get("OperationId", operation.get("Id"))
+                    operation_details = str(operation.get("Details", ""))
+
+                    if operation_type == 5 and not is_etl_token:
+                        # Export operation: match by export id
+                        try:
+                            export_id = self.__get_export_id(object_id)
+                        except Exception:
+                            raise Exception(f"Export '{object_id}' not found.")
+
+                        if export_id is not None and str(export_id) == operation_details:
+                            script_parameters.append(
+                                {
+                                    "ScriptOperationId": operation_id,
+                                    "ScriptOperationType": operation_type,
+                                    "ScriptOperationDescription": "",
+                                    "Parameters": token_params
+                                }
+                            )
+                            object_found = True
+                    elif operation_type == 15 and is_etl_token:
+                        # ETL operation: build details and match with operation details
+                        if not etl_details_checked:
+                            try:
+                                etl_details = self.__build_etl_details(object_id)
+                            except Exception as ex:
+                                raise
+                            etl_details_checked = True
+                        if etl_details is not None and etl_details.upper().strip() == operation_details.upper().strip():
+                            script_parameters.append(
+                                {
+                                    "ScriptOperationId": operation_id,
+                                    "ScriptOperationType": operation_type,
+                                    "ScriptOperationDescription": "",
+                                    "Parameters": token_params
+                                }
+                            )
+                            object_found = True
+                if not object_found:
+                    raise Exception(f"Parameter '{object_id}' is invalid.")
+
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/execute"
         body = {
-            "DefaultAssociationId": -1,
-            "ScriptParameters": [],
+            "DefaultAssociationId": default_association_id,
+            "ScriptParameters": script_parameters,
             "OperationDate": CorporateServer.__get_current_utc_iso8601(),
-            "NotifyByEmail": True,
-            "IdiomId": idiom_id if idiom_id != -1 else self.__default_idiom_id}
+            "NotifyByEmail": notify_by_email,
+            "IdiomId": idiom_id if idiom_id != -1 else self.__default_idiom_id
+        }
 
         # Make POST request
         response = requests.post(url, json=body, headers=self.__get_default_headers())
@@ -1480,7 +1690,6 @@ class CorporateServer:
             raise Exception(f"Error starting fact association processing (Status code: {response.status_code})")
         else:
             if self.__console_feedback: print("ok")
-
 
     def process_fact(self, fact_reference):
         """Process fact (this function is synchronous and will wait for the fact to be procesed)
@@ -1796,12 +2005,14 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok");
 
-    def execute_export(self, reference, parameters=None, idiom_id=-1):
+    def execute_export(self, reference, notify_by_email, idiom_code, parameters=None):
         """Execute export (this function is synchronous and will wait for the export to finish executing)
 
             Parameters:
             reference (string): Reference of the export
-            idiom_id (int): Id of the idiom to be used
+            notify_by_email (bool): True if email notification should be sent when export finishes executing, False otherwise
+            idiom_code (string): Code of the idiom to be used
+            parameters (optional): parameters to be used in the export
 
             Returns:
             Nothing if export is executed or an Exception if it fails for any reason
@@ -1811,6 +2022,9 @@ class CorporateServer:
         # Get export id
         export_id = self.__get_export_id(reference)
 
+        # Get idiom id
+        idiom_id = self.__get_idiom_id(idiom_code)
+
         # Set parameters' values (if informed)
         parameter_values = parameters if parameters is not None else []
 
@@ -1818,7 +2032,7 @@ class CorporateServer:
         url = f"{self.__base_url}/{API_VERSION}/integration/exports/{export_id}/execute"
         body = {"ParametersValue": parameter_values,
                 "OperationDate":  CorporateServer.__get_current_utc_iso8601(),
-                "NotifyByEmail": True,
+                "NotifyByEmail": notify_by_email,
                 "IdiomId": idiom_id if idiom_id != -1 else self.__default_idiom_id}
 
         # Make POST request
