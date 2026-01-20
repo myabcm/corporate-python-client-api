@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "myabcm_corporate_client_api"
 
-version = "0.2.0"
+version = "0.2.1"
 
 authors = [
-    { name="Clovis Ribeiro", email="clovis.ribeiro@myabcm.com" },
-	{ name="Luiz Guilherme Oliveira", email="luiz.oliveira@myabcm.com" }]
+    { name="Luiz Guilherme Oliveira", email="luiz.oliveira@myabcm.com" },
+    { name="Clovis Ribeiro", email="clovis.ribeiro@myabcm.com" }]
 	
 description = "MyABCM Corporate Python Client API"
 
