@@ -5,16 +5,12 @@ import uuid
 from datetime import datetime
 from typing import List, Dict
 
+from enums import AbmFactType, LogonResult, AbmDataSourceType, AbmOperationType, AbmOperationStatus
+from error_handler import get_error_message_from_response
 import requests
 
 # --------------------------------------------------------------------------------------
 # Constants declaration
-
-OPERATION_SCHEDULED = 0
-OPERATION_IN_PROGRESS = 1
-OPERATION_ABORTING = 2
-OPERATION_FINISHED = 3
-OPERATION_ABORTED = 4
 
 SEPARATOR_CONSTANT = "\r\r\r\n\r\r\r"
 
@@ -74,13 +70,13 @@ class CorporateServer:
             data = response.json()
             return data
         else:
-            raise Exception(f"Error getting models (Status code: {response.status_code})")
+            raise Exception(f"Error getting models. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_model_id(self,model_reference):
         # Get models
         models = self.__get_models()
 
-        # Search for desired model (and return its Id if found)
+        # Search for desired model (and return its ID if found)
         for model in models:
             if model['Reference'] == model_reference and model['Deleted'] == False:
                 return model['Id']
@@ -112,13 +108,13 @@ class CorporateServer:
             data = response.json()
             return data
         else:
-            raise Exception(f"Error getting export templates (Status code: {response.status_code})")
+            raise Exception(f"Error getting export templates. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_export_template_id(self,export_template_name):
         # Get export templates
         export_templates = self.__get_export_templates()
 
-        # Search for desired model (and return its Id if found)
+        # Search for desired model (and return its ID if found)
         for export_template in export_templates:
             if export_template['Name'].upper() == export_template_name.upper():
                 return export_template['Id']
@@ -139,13 +135,13 @@ class CorporateServer:
             data = response.json()
             return data
         else:
-            raise Exception(f"Error getting imports (Status code: {response.status_code})")
+            raise Exception(f"Error getting imports. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_import_id(self,import_reference):
         # Get imports
         imports = self.__get_imports()
 
-        # Search for desired import (and return its Id if found)
+        # Search for desired import (and return its ID if found)
         for imp in imports:
             if imp['Reference'] == import_reference:
                 return imp['Id']
@@ -166,13 +162,13 @@ class CorporateServer:
             data = response.json()
             return data
         else:
-            raise Exception(f"Error getting exports (Status code: {response.status_code})")
+            raise Exception(f"Error getting exports. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_export_id(self, export_reference):
         # Get exports
         imports = self.__get_exports()
 
-        # Search for desired export (and return its Id if found)
+        # Search for desired export (and return its ID if found)
         for imp in imports:
             if imp['Reference'] == export_reference:
                 return imp['Id']
@@ -193,13 +189,13 @@ class CorporateServer:
             data = json.loads(response.text)
             return data
         else:
-            raise Exception(f"Error getting script (Status code: {response.status_code})")
+            raise Exception(f"Error getting script. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_script_id(self, reference):
         # Get scripts
         scripts = self.__get_scripts()
 
-        # Search for desired script (and return its Id if found)
+        # Search for desired script (and return its ID if found)
         for scr in scripts:
             if scr['Reference'] == reference:
                 return scr['Id']
@@ -220,7 +216,7 @@ class CorporateServer:
             data = response.json()
             return data
         else:
-            raise Exception(f"Error getting script operations (Status code: {response.status_code})")
+            raise Exception(f"Error getting script operations. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_cubes(self):
         # Set URL
@@ -235,13 +231,13 @@ class CorporateServer:
             data = json.loads(response.text)
             return data
         else:
-            raise Exception(f"Error getting cubes (Status code: {response.status_code})")
+            raise Exception(f"Error getting cubes. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_cube_id(self, reference):
         # Get cubes
         cubes = self.__get_cubes()
 
-        # Search for desired cube (and return its Id if found)
+        # Search for desired cube (and return its ID if found)
         for cube in cubes:
             if cube['Reference'] == reference:
                 return cube['Id']
@@ -262,16 +258,16 @@ class CorporateServer:
             data = response.json()
             return data
         else:
-            raise Exception(f"Error getting facts (Status code: {response.status_code})")
+            raise Exception(f"Error getting facts. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_fact_id(self, fact_reference, processable_only=False):
         # Get facts
         facts = self.__get_facts()
 
-        # Search for desired fact (and return its Id if found)
+        # Search for desired fact (and return its ID if found)
         for fact in facts:
             if fact['Reference'] == fact_reference:
-                if fact['FactType'] != 0 and processable_only:
+                if fact['FactType'] != AbmFactType.CrossModule and processable_only:
                     raise Exception(f"Fact {fact_reference} was found, but its type is not processable")
                 else:
                     return fact['Id']
@@ -305,7 +301,7 @@ class CorporateServer:
             data = response.json()
             return data
         else:
-            raise Exception(f"Error getting files (Status code: {response.status_code})")
+            raise Exception(f"Error getting files. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_file_id(self,file_name, username=""):
         # Get files
@@ -314,7 +310,7 @@ class CorporateServer:
         # Define who we should pick as file's owner (username parameter if passed or current logged user)
         target_user = (username if username != "" else self.__logged_username)
 
-        # Search for desired file (and return its Id if found)
+        # Search for desired file (and return its ID if found)
         for file in files:
             if file['FileName'].upper() == file_name.upper() and file['UserName'].upper() == target_user.upper():
                 return file['Id']
@@ -338,7 +334,7 @@ class CorporateServer:
             self.__default_idiom_id = data.get("DefaultIdiomId")
         else:
             # Something got wrong, return exception
-            raise Exception(f"Error getting and storing user details (Status code: {response.status_code})")
+            raise Exception(f"Error getting and storing user details. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_available_associations(self):
         # Set URL & parameters
@@ -355,13 +351,13 @@ class CorporateServer:
             return data
         else:
             # Something got wrong, generate exception with status code
-            raise Exception(f"Error model associations (Status code: {response.status_code})")
+            raise Exception(f"Error model associations. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_association_id(self, period_reference, scenario_reference):
         # Get available associations
         associations = self.__get_available_associations()
 
-        # Search for desired association (and return its Id if found)
+        # Search for desired association (and return its ID if found)
         for association in associations:
             if association['PeriodReference'] == period_reference and association['ScenarioReference'] == scenario_reference:
                 return association['Id']
@@ -378,7 +374,7 @@ class CorporateServer:
         signs = ["-", "\\", "|", "/",  "-",  "\\",  "|",  "/"]
         sign_pos = 0
 
-        # Shot our initial  "prograss indicator"
+        # Shot our initial "progress indicator"
         if self.__console_feedback:
             print("[-]", end="", flush=True)
 
@@ -392,7 +388,7 @@ class CorporateServer:
             if CorporateServer.__status_code_ok(response.status_code):
                 data = response.json()
                 # Check status and return if aborted/finished or wait 1 second and try again
-                if data.get("OperationStatus") == OPERATION_ABORTED or data.get("OperationStatus") == OPERATION_FINISHED:
+                if data.get("OperationStatus") == AbmOperationStatus.Aborted or data.get("OperationStatus") == AbmOperationStatus.Finished:
                     condition = True
                 else:
                     time.sleep(1)
@@ -401,7 +397,7 @@ class CorporateServer:
                         sign_pos = sign_pos + 1 if sign_pos < 7 else 0
             else:
                 # Something got wrong, return exception
-                raise Exception(f"Error waiting for operation to finish (Status code: {response.status_code})")
+                raise Exception(f"Error waiting for operation to finish. Error details: {get_error_message_from_response(response.content)}")
 
         # Overwrite our "progress indicator" with spaces
         if self.__console_feedback:
@@ -421,7 +417,7 @@ class CorporateServer:
             return response.json()
         else:
             # Something got wrong, generate exception with status code
-            raise Exception(f"Error getting pending operations in group {group_id} (Status code: {response.status_code})")
+            raise Exception(f"Error getting pending operations in group {group_id}. Error details: {get_error_message_from_response(response.content)}")
 
     def __get_session_token(self):
         """Get current session token
@@ -449,7 +445,7 @@ class CorporateServer:
         # Parse response (casting the response to a List[Dict] so we can use it later
         data: List[Dict] = response.json()
 
-        # Search for desired idiom (and return its Id if found)
+        # Search for desired idiom (and return its ID if found)
         found_id = next(
             (item['Id'] for item in data if item.get('Code').upper() == idiom_code.upper()),
             -1
@@ -526,7 +522,7 @@ class CorporateServer:
         """Logon to MyABCM Corporate using the credentials informed when creating the CorporateServer object
 
             Returns:
-            Nothing if logon is sucessfull or an Exception if it fails for any reason
+            Nothing if logon is successful or an Exception if it fails for any reason
         """
         if self.__instance_with_token:
             if self.__console_feedback: print(f"Logging on with token {self.__session_token}...", end="")
@@ -544,8 +540,9 @@ class CorporateServer:
             # Check response
             if CorporateServer.__status_code_ok(response.status_code):
                 data = response.json()
-                if data.get("Result") == 0:
-                    # Login succesfull, store session token
+
+                if data.get("Result") == LogonResult.Ok:
+                    # Login successful, store session token
                     self.__session_token = data.get("SessionToken")
                     # Store additional user details
                     self.__store_logged_user_details()
@@ -555,26 +552,26 @@ class CorporateServer:
                     if self.__console_feedback: print(f"failed")
 
                     # Login failed, generate custom exception based on result code
-                    if data.get("Result") == 6: # PasswordExpired
+                    if data.get("Result") == LogonResult.PasswordExpired:
                         raise Exception("Error logging in (Password expired)")
-                    if data.get("Result") == 7: # ProductNotAuthorized
+                    if data.get("Result") == LogonResult.ProductNotAuthorized:
                         raise Exception("Error logging in (Product not authorized)")
-                    if data.get("Result") == 8: # LicenseNotAvailable
+                    if data.get("Result") == LogonResult.NoLicenseAvailable:
                         raise Exception("Error logging in (License not available)")
-                    if data.get("Result") == 9: # UserNotAuthorized
+                    if data.get("Result") == LogonResult.UserNotAuthorized:
                         raise Exception("Error logging in (User not authorized expired)")
 
                     # Result code not in 6 to 9 range, generate generic exception with result code
-                    raise Exception(f"Error logging in (Logon result code: {data.get('Result')})")
+                    raise Exception(f"Error logging in (Logon result code: {LogonResult(data.get('Result')).name})")
             else:
                 # Something got wrong, generate exception with status code
-                raise Exception(f"Error logging in (Status code: {response.status_code})")
+                raise Exception(f"Error logging in. Error details: {get_error_message_from_response(response.content)}")
 
     def logoff(self):
         """Logoff from MyABCM Corporate
 
             Returns:
-            Nothing if logoff is sucessfull or an Exception if it fails for any reason
+            Nothing if logoff is successful or an Exception if it fails for any reason
         """
         if self.__instance_with_token:
             if self.__console_feedback: print(f"Logging off with token {self.__session_token} ...", end="")
@@ -588,11 +585,11 @@ class CorporateServer:
         # Make POST request
         response = requests.post(url, json=body, headers=self.__get_default_headers())
 
-        # Check reponse
+        # Check response
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
 
-            raise Exception(f"Error logging off (Status code: {response.status_code})")
+            raise Exception(f"Error logging off. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -621,7 +618,7 @@ class CorporateServer:
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("Failed")
 
-            raise Exception(f"Error selecting model (Status code: {response.status_code})")
+            raise Exception(f"Error selecting model. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -672,7 +669,7 @@ class CorporateServer:
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
 
-            raise Exception(f"Error creating model (Status code: {response.status_code})")
+            raise Exception(f"Error creating model (Status code: {get_error_message_from_response(response.content)})")
         else:
             if self.__console_feedback: print("ok")
 
@@ -701,7 +698,7 @@ class CorporateServer:
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
 
-            raise Exception(f"Error removing model (Status code: {response.status_code})")
+            raise Exception(f"Error removing model. Error details: {get_error_message_from_response(response.content)}")
 
         # Loop and wait for model to be deleted
         condition = True
@@ -741,7 +738,7 @@ class CorporateServer:
         # Check response
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error starting model calculation (Status code: {response.status_code})")
+            raise Exception(f"Error starting model calculation. Error details: {get_error_message_from_response(response.content)}")
 
         # Read operation id (that is returned in response.text)
         operation_id = response.text
@@ -767,7 +764,7 @@ class CorporateServer:
         # Define who should we pick as file's owner (username parameter if passed or current logged user)
         target_user = (username if username != "" else self.__logged_username)
 
-        # Search for desired file (and return its Id if found)
+        # Search for desired file (and return its ID if found)
         for file in files:
             if file['FileName'].upper() == file_name.upper() and file['UserName'].upper() == target_user.upper():
                 return True
@@ -792,7 +789,7 @@ class CorporateServer:
 
         # Set header with authorization
         # We don't use the default header used in all ather calls as we do not
-        # wnat the default content type "application/json" in this call
+        # want the default content type "application/json" in this call
         headers = {
             'Authorization': f'Bearer {self.__session_token}'
         }
@@ -830,9 +827,9 @@ class CorporateServer:
         Returns:
         File requested or an Exception if it fails for any reason
         """
-        if self.__console_feedback: print(f"Dowloading file {file_name}...", end="")
+        if self.__console_feedback: print(f"Downloading file {file_name}...", end="")
 
-        # Get the ID of the file to be downloaded (assuming here the current logged user is the file ownwer)
+        # Get the ID of the file to be downloaded (assuming here the current logged user is the file owner)
         file_id = self.__get_file_id(file_name)
 
         # Set URL
@@ -864,7 +861,7 @@ class CorporateServer:
         """
         if self.__console_feedback: print(f"Removing file {file_name} from server...", end="")
 
-        # Get the ID of the file to be removed (assuming here the current logged user is the file ownwer)
+        # Get the ID of the file to be removed (assuming here the current logged user is the file owner)
         file_id = self.__get_file_id(file_name)
 
         # Set URL & parameters
@@ -894,7 +891,7 @@ class CorporateServer:
         # Get imports
         imports = self.__get_imports()
 
-        # Search for desired import (and return its Id if found)
+        # Search for desired import (and return its ID if found)
         for imp in imports:
             if imp['Reference'] == reference:
                 if self.__console_feedback: print("yes")
@@ -910,7 +907,7 @@ class CorporateServer:
             parameters: Dictionary with all properties required for the import. For more info, check swagger documentation
 
             Returns:
-            Nothing if operation is sucessfull or an Exception if it fails for any reason
+            Nothing if operation is successful or an Exception if it fails for any reason
         """
         if self.__console_feedback: print(f"Adding new import to currently selected model...", end="")
 
@@ -933,28 +930,31 @@ class CorporateServer:
         datasource_parameter = parameters.get("DataSourceParameter")
 
         # Validate datasource_type
-        if datasource_type < 0 or datasource_type > 8:
+        if not AbmDataSourceType.has_value(datasource_type):
             raise Exception("Invalid DataSourceType. Must be between 0 and 8")
 
         # Validate datasource_parameter (based on datasource_type)
-        if datasource_type == 0 or datasource_type == 1 or datasource_type == 5:
+        if datasource_type == AbmDataSourceType.Excel or datasource_type == AbmDataSourceType.Access or datasource_type == AbmDataSourceType.ETL:
             # Parameter is and EXCEL, ACCESS or ETL file, so get file it
             if self.file_exists(datasource_parameter):
                 datasource_parameter = self.__get_file_id(datasource_parameter)
             else:
                 raise Exception(f"File {datasource_parameter} not found in server for the current logged user")
 
-        if datasource_type == 6:
+        elif datasource_type == AbmDataSourceType.Internal:
             # Parameter is reference of the source model, so get it
             if self.model_exists(datasource_parameter):
                 datasource_parameter = self.__get_model_id(datasource_parameter)
             else:
                 raise Exception(f"Model {datasource_parameter} not found in server for the current logged user")
 
-        if datasource_type == 7:
+        elif datasource_type == AbmDataSourceType.DataMap:
             # Parameter is a DataMap, datasource parameter is ignored in this
             # case, so we set it to an empty string
             datasource_parameter =  ""
+
+        elif datasource_type == AbmDataSourceType.SharedFile:
+            pass
 
         # If datasource type is 2 (OLE DB), 3 (SQL Server), 4 (Oracle) or 8 (SharedFile) we just use the
         # datasource_parameter with no further validation
@@ -1012,7 +1012,7 @@ class CorporateServer:
         # Check response
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error adding import {parameters.get('Name')} (Status code: {response.status_code}. Text: {response.text})")
+            raise Exception(f"Error adding import {parameters.get('Name')}. Error: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1049,7 +1049,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error calling execute import (Status code: {response.status_code})")
+            raise Exception(f"Error calling execute import. Error details: {get_error_message_from_response(response.content)}")
 
         # Read operation id (that is returned in response.text)
         operation_id =  response.text
@@ -1082,9 +1082,182 @@ class CorporateServer:
         # Check response
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed");
-            raise Exception(f"Error removing import (Status code: {response.status_code})")
+            raise Exception(f"Error removing import. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok");
+
+    def add_export(self, parameters):
+        """Add a new export to the selected model
+
+            Parameters:
+            parameters: Dictionary with all properties required for the import. For more info, check swagger documentation
+
+            Returns:
+            Nothing if operation is successful or an Exception if it fails for any reason
+        """
+        if self.__console_feedback: print(f"Adding new export to currently selected model...", end="")
+
+        # Make sure we have the minimum required properties in the parameters dictionary
+        if parameters.get("Name") is None:
+            if self.__console_feedback: print("failed")
+            raise Exception("Missing required property 'Name'")
+        if parameters.get("Reference") is None:
+            if self.__console_feedback: print("failed")
+            raise Exception("Missing required property 'Reference'")
+        if parameters.get("DataSourceType") is None:
+            if self.__console_feedback: print("failed")
+            raise Exception("Missing required property 'DataSourceType'")
+        if parameters.get("DataSourceParameter") is None:
+            if self.__console_feedback: print("failed")
+            raise Exception("Missing required property 'DataSourceParameter'")
+        if parameters.get("TableName") is None:
+            if self.__console_feedback: print("failed")
+            raise Exception("Missing required property 'TableName'")
+
+        # Get the export template id (if ExportTemplateName is informed)
+        export_template_id = self.__get_export_template_id(parameters.get("ExportTemplateName")) if parameters.get(
+            "ExportTemplateName") is not None else -1
+
+        # Store DataSourceType and DataSourceParameter in our helper variables
+        datasource_type = parameters.get("DataSourceType")
+        datasource_parameter = parameters.get("DataSourceParameter")
+
+        # Validate datasource_type
+        if not AbmDataSourceType.has_value(datasource_type) or datasource_type == AbmDataSourceType.Internal or datasource_type == AbmDataSourceType.DataMap:
+            raise Exception("Invalid DataSourceType. Must be either 0, 1, 2, 3, 4, 5 or 8")
+
+        # Validate datasource_parameter (based on datasource_type)
+        if datasource_type == AbmDataSourceType.Excel or datasource_type == AbmDataSourceType.Access or datasource_type == AbmDataSourceType.ETL:
+            # Parameter is and EXCEL, ACCESS or ETL file, so get file it
+            if self.file_exists(datasource_parameter):
+                datasource_parameter = self.__get_file_id(datasource_parameter)
+            else:
+                raise Exception(f"File {datasource_parameter} not found in server for the current logged user")
+
+        # If datasource type is 2 (OLE DB), 3 (SQL Server), 4 (Oracle) or 8 (Shared Files), we just use the
+        # datasource_parameter with no further validation
+
+        # Set URL & parameters(body)
+        url = f"{self.__base_url}/{API_VERSION}/integration/exports"
+        body = {
+            "Name": parameters.get("Name"),
+            "Reference": parameters.get("Reference"),
+            "Description": parameters.get("Description") if parameters.get("Description") is not None else "",
+            "DataSourceType": datasource_type,
+            "DataSourceParameter": str(datasource_parameter),
+            "TableName": parameters.get("TableName") if parameters.get("TableName") is not None else "",
+            "Query": parameters.get("Query") if parameters.get("Query") is not None else "",
+            "ExportTemplateId": export_template_id,
+            "ReplaceData": parameters.get("ReplaceData") if parameters.get("ReplaceData") is not None else True,
+        }
+
+        # Make POST request
+        response = requests.post(url, json=body, headers=self.__get_default_headers())
+
+        # Check response
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed")
+            raise Exception(
+                f"Error adding export {parameters.get('Name')} (Status code: {response.status_code}. Text: {response.text})")
+        else:
+            if self.__console_feedback: print("ok")
+
+    def export_exists(self, reference):
+        """Check if export exists
+
+            Parameters:
+            reference (string): Reference of the export
+
+            Returns:
+            True if it exists, otherwise False
+        """
+        if self.__console_feedback: print(f"Checking if export exists {reference}...", end="")
+        # Get exports
+        exports = self.__get_exports()
+
+        # Search for desired export (and return True if found)
+        for exp in exports:
+            if exp['Reference'] == reference:
+                if self.__console_feedback: print("yes")
+                return True
+
+        if self.__console_feedback: print("no")
+        return False
+
+    def remove_export(self, reference):
+        """Remove an existing export
+
+            Parameters:
+            reference (string): Reference of the export
+
+            Returns:
+            Nothing if export is removed or an Exception if it fails for any reason
+        """
+        if self.__console_feedback: print(f"Removing export {reference}...", end="")
+
+        # Get export id
+        export_id = self.__get_export_id(reference)
+
+        # Set URL
+        url = f"{self.__base_url}/{API_VERSION}/integration/exports/{export_id}"
+
+        # Make DELETE request
+        response = requests.delete(url, headers=self.__get_default_headers())
+
+        # Check response
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed");
+            raise Exception(
+                f"Error removing export. Error details: {get_error_message_from_response(response.content)}")
+        else:
+            if self.__console_feedback: print("ok");
+
+    def execute_export(self, reference, notify_by_email, idiom_code, parameters=None):
+        """Execute export (this function is synchronous and will wait for the export to finish executing)
+
+            Parameters:
+            reference (string): Reference of the export
+            notify_by_email (bool): True if email notification should be sent when export finishes executing, False otherwise
+            idiom_code (string): Code of the idiom to be used
+            parameters (optional): parameters to be used in the export
+
+            Returns:
+            Nothing if export is executed or an Exception if it fails for any reason
+        """
+        if self.__console_feedback: print(f"Executing export {reference}...", end="")
+
+        # Get export id
+        export_id = self.__get_export_id(reference)
+
+        # Get idiom id
+        idiom_id = self.__get_idiom_id(idiom_code)
+
+        # Set parameters' values (if informed)
+        parameter_values = parameters if parameters is not None else []
+
+        # Set URL & parameters
+        url = f"{self.__base_url}/{API_VERSION}/integration/exports/{export_id}/execute"
+        body = {"ParametersValue": parameter_values,
+                "OperationDate": CorporateServer.__get_current_utc_iso8601(),
+                "NotifyByEmail": notify_by_email,
+                "IdiomId": idiom_id if idiom_id != -1 else self.__default_idiom_id}
+
+        # Make POST request
+        response = requests.post(url, json=body, headers=self.__get_default_headers())
+
+        # Check if the request was successful (status code 200)
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed")
+            raise Exception(
+                f"Error calling execute export. Error details: {get_error_message_from_response(response.content)}")
+
+        # Read operation id (that is returned in response.text)
+        operation_id = response.text
+
+        # Wait for operation to finish
+        self.__wait_for_operation_to_finish(operation_id)
+
+        if self.__console_feedback: print("ok");
 
     def add_script(self, name, reference, description):
         """Add a new script
@@ -1110,7 +1283,7 @@ class CorporateServer:
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
 
-            raise Exception(f"Error creating script (Status code: {response.status_code})")
+            raise Exception(f"Error creating script. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1139,7 +1312,7 @@ class CorporateServer:
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
 
-            raise Exception(f"Error removing script (Status code: {response.status_code})")
+            raise Exception(f"Error removing script. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1174,7 +1347,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
              if self.__console_feedback: print("failed")
-             raise Exception(f"Error adding cube to script (Status code: {response.status_code})")
+             raise Exception(f"Error adding cube to script (Status code: {get_error_message_from_response(response.content)})")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1202,7 +1375,7 @@ class CorporateServer:
         # Get cube id
         cube_id = self.__get_cube_id(cube_reference)
 
-        # Convert period/scenario list into an association id string separated by commo
+        # Convert period/scenario list into an association id string separated by comma
         ps_ids = self.__get_association_list(period_scenario_list)
 
         # Set URL & parameters
@@ -1217,7 +1390,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error adding cube to script (Status code: {response.status_code})")
+            raise Exception(f"Error adding cube to script. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1250,12 +1423,12 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error adding export to script (Status code: {response.status_code})")
+            raise Exception(f"Error adding export to script. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
     def add_import_to_script(self, script_reference, import_reference):
-        """Add impport cube to script
+        """Add import cube to script
 
             Parameters:
             script_reference (string): Reference of the script where the cube will be added
@@ -1283,7 +1456,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error adding import to script (Status code: {response.status_code})")
+            raise Exception(f"Error adding import to script. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1303,7 +1476,7 @@ class CorporateServer:
         # Get script id
         script_id = self.__get_script_id(script_reference)
 
-        # Convert period/scenario list into an association id string separated by commo
+        # Convert period/scenario list into an association id string separated by comma
         ps_ids = self.__get_association_list(period_scenario_list)
 
         # Set URL & parameters
@@ -1317,11 +1490,11 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error adding calculation to script (Status code: {response.status_code})")
+            raise Exception(f"Error adding calculation to script (Status code: {get_error_message_from_response(response.content)})")
         else:
             if self.__console_feedback: print("ok")
 
-    def add_etlx_file_to_script(self, script_reference, etlx_filename):
+    def add_etlx_file_to_script(self, script_reference, etlx_filename, is_shared_file):
         """Add ETLX file processing to script
 
             Parameters:
@@ -1334,15 +1507,18 @@ class CorporateServer:
 
         if self.__console_feedback: print(f"Adding ETLX file {etlx_filename} to script {script_reference}...", end="")
 
+        if is_shared_file:
+            details = "1" + SEPARATOR_CONSTANT + "-1" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "False" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + etlx_filename + SEPARATOR_CONSTANT
+        else:
+            # Get file id
+            file_id = self.__get_file_id(etlx_filename)
+            details =  "1" + SEPARATOR_CONSTANT + str(file_id) + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "False" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT
+
         # Get script id
         script_id = self.__get_script_id(script_reference)
 
-        # Get file id
-        file_id = self.__get_file_id(etlx_filename)
-
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
-        details =  "1" + SEPARATOR_CONSTANT + str(file_id) + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT +  "" + SEPARATOR_CONSTANT +  "False" + SEPARATOR_CONSTANT +  "" + SEPARATOR_CONSTANT +  "" + SEPARATOR_CONSTANT
 
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
         body = { "Operations": [ { "OperationId": 0, "OperationType": 15, "Details": details, "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
@@ -1353,7 +1529,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error ETLX file to script (Status code: {response.status_code})")
+            raise Exception(f"Error ETLX file to script. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1390,7 +1566,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error ETLX database to script (Status code: {response.status_code})")
+            raise Exception(f"Error ETLX database to script. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1425,7 +1601,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error adding fact to script (Status code: {response.status_code})")
+            raise Exception(f"Error adding fact to script. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1436,7 +1612,7 @@ class CorporateServer:
 
             Parameters:
             reference (string): Reference of the script
-            notify_by_email (boolean): Indicates if an email notification should be sent to the user after the script execution)
+            notify_by_email (boolean): Indicates if an email notification should be sent to the user after the script execution
             idiom_code (string): Code of the idiom to be used
             period_scenario (string): reference of the default period / scenario (i.e.: JAN/ACTUAL)
             parameters (array): string array with the script parameters for possible exports/etl packages
@@ -1490,7 +1666,7 @@ class CorporateServer:
                     operation_id = operation.get("OperationId", operation.get("Id"))
                     operation_details = str(operation.get("Details", ""))
 
-                    if operation_type == 5 and not is_etl_token:
+                    if operation_type == AbmOperationType.Export and not is_etl_token:
                         # Export operation: match by export id
                         try:
                             export_id = self.__get_export_id(object_id)
@@ -1507,13 +1683,13 @@ class CorporateServer:
                                 }
                             )
                             object_found = True
-                    elif operation_type == 15 and is_etl_token:
+                    elif operation_type == AbmOperationType.EtlPackage and is_etl_token:
                         # ETL operation: build details and match with operation details
                         if not etl_details_checked:
                             try:
                                 etl_details = self.__build_etl_details(object_id)
                             except Exception as ex:
-                                raise
+                                raise ex
                             etl_details_checked = True
                         if etl_details is not None and etl_details.upper().strip() == operation_details.upper().strip():
                             script_parameters.append(
@@ -1544,7 +1720,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error starting script (Status code: {response.status_code})")
+            raise Exception(f"Error starting script. Error details: {get_error_message_from_response(response.content)}")
 
         # Get group id from the response
         group_id = response.text
@@ -1563,7 +1739,7 @@ class CorporateServer:
         while not condition:
             operations = self.__get_script_operations_in_group(group_id)
 
-            count = len([op for op in operations if 0 <= op.get('OperationStatus') <= 2])
+            count = len([op for op in operations if AbmOperationStatus.Scheduled <= op.get('OperationStatus') <= AbmOperationStatus.Aborting])
 
             if count <= 0:
                 condition = True
@@ -1607,7 +1783,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error adding associations to false (Status code: {response.status_code})")
+            raise Exception(f"Error adding associations to false. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1643,11 +1819,11 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error removing associations to false (Status code: {response.status_code})")
+            raise Exception(f"Error removing associations to false. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
-    def process_fact_associations(self, fact_reference, period_scenario_list):
+    def process_fact_associations(self, fact_reference, notify_by_email, period_scenario_list):
         """Execute (process) fact associations
 
             WARNING: This method executes ASYNCHRONOUSLY and won't wait for the fact association
@@ -1676,7 +1852,7 @@ class CorporateServer:
         url = f"{self.__base_url}/{API_VERSION}/analysis/facts/{fact_id}/associations/execute"
         body = { "AssociationIds": ps_ids_int_list,
                 "OperationDate": self.__get_current_utc_iso8601(),
-                "NotifyByEmail": False,
+                "NotifyByEmail": notify_by_email,
                 "GroupIds": [],
                 "UserIds": []
             }
@@ -1687,12 +1863,12 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error starting fact association processing (Status code: {response.status_code})")
+            raise Exception(f"Error starting fact association processing. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
-    def process_fact(self, fact_reference):
-        """Process fact (this function is synchronous and will wait for the fact to be procesed)
+    def process_fact(self, fact_reference, notify_by_email):
+        """Process fact (this function is synchronous and will wait for the fact to be processed)
 
             Parameters:
             fact_reference (string): Reference of the fact
@@ -1700,7 +1876,7 @@ class CorporateServer:
             Returns:
             Nothing if fact is processed or an Exception if it fails for any reason
                     """
-        if self.__console_feedback: print(f"Procesing fact {fact_reference}...", end="")
+        if self.__console_feedback: print(f"Processing fact {fact_reference}...", end="")
 
         # Get fact id
         fact_id = self.__get_fact_id(fact_reference)
@@ -1708,7 +1884,7 @@ class CorporateServer:
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/analysis/facts/{fact_id}/execute"
         body = {"OperationDate": CorporateServer.__get_current_utc_iso8601(),
-                "NotifyByEmail": False,
+                "NotifyByEmail": notify_by_email,
                 "GroupIds": [],
                 "UserIds": []
             }
@@ -1719,7 +1895,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error calling process fact (Status code: {response.status_code})")
+            raise Exception(f"Error calling process fact. Error details: {get_error_message_from_response(response.content)}")
 
         # Read operation id (that is returned in response.text)
         operation_id =  response.text
@@ -1729,8 +1905,8 @@ class CorporateServer:
 
         if self.__console_feedback: print("ok");
 
-    def process_regular_cube(self, reference, force_reprocessing):
-        """Process cube (this function is synchronous and will wait for the fact to be procesed)
+    def process_regular_cube(self, reference, force_reprocessing, notify_by_email):
+        """Process cube (this function is synchronous and will wait for the fact to be processed)
 
             Parameters:
             reference (string): Reference of the cube
@@ -1738,7 +1914,7 @@ class CorporateServer:
             Returns:
             Nothing if cube is processed or an Exception if it fails for any reason
         """
-        if self.__console_feedback: print(f"Procesing cube {reference}...", end="")
+        if self.__console_feedback: print(f"Processing cube {reference}...", end="")
 
         # Get cube id
         cube_id = self.__get_cube_id(reference)
@@ -1747,7 +1923,7 @@ class CorporateServer:
         url = f"{self.__base_url}/{API_VERSION}/analysis/cubes/{cube_id}/regular/execute"
         body = {"ForceReprocessing": force_reprocessing,
                 "OperationDate": CorporateServer.__get_current_utc_iso8601(),
-                "NotifyByEmail": False
+                "NotifyByEmail": notify_by_email
                 }
 
         # Make POST request
@@ -1756,7 +1932,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error processing cube (Status code: {response.status_code})")
+            raise Exception(f"Error processing cube. Error details: {get_error_message_from_response(response.content)}")
 
         # Read operation id (that is returned in response.text)
         operation_id =  response.text
@@ -1766,8 +1942,8 @@ class CorporateServer:
 
         if self.__console_feedback: print("ok");
 
-    def process_tabular_cube(self, reference, cube_processing_type, period_scenario_list):
-        """Process cube (this function is synchronous and will wait for the fact to be procesed)
+    def process_tabular_cube(self, reference, cube_processing_type, notify_by_email, period_scenario_list):
+        """Process cube (this function is synchronous and will wait for the fact to be processed)
 
             Parameters:
             reference (string): Reference of the cube
@@ -1781,7 +1957,7 @@ class CorporateServer:
             Returns:
             Nothing if cube is processed or an Exception if it fails for any reason
         """
-        if self.__console_feedback: print(f"Procesing cube {reference}...", end="")
+        if self.__console_feedback: print(f"Processing cube {reference}...", end="")
 
         # Get cube id
         cube_id = self.__get_cube_id(reference)
@@ -1798,7 +1974,7 @@ class CorporateServer:
             "CubeProcessingType": cube_processing_type,
             "AssociationIds": ps_ids_int_list,
             "OperationDate":  CorporateServer.__get_current_utc_iso8601(),
-            "NotifyByEmail": False
+            "NotifyByEmail": notify_by_email
             }
 
         # Make POST request
@@ -1807,7 +1983,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error processing cube (Status code: {response.status_code})")
+            raise Exception(f"Error processing cube. Error details: {get_error_message_from_response(response.content)}")
 
         # Read operation id (that is returned in response.text)
         operation_id =  response.text
@@ -1833,7 +2009,7 @@ class CorporateServer:
 
         if self.__console_feedback: print(f"Resetting association {period_reference}/{scenario_reference}...", end="")
 
-        # Get assoication id
+        # Get association id
         ps_id = self.__get_association_id(period_reference, scenario_reference)
 
         # Set URL & parameters
@@ -1856,7 +2032,7 @@ class CorporateServer:
         # Check if the request was successful (status code 200)
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error resetting association (Status code: {response.status_code})")
+            raise Exception(f"Error resetting association. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
@@ -1878,180 +2054,11 @@ class CorporateServer:
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
 
-            raise Exception(f"Error removing cubes from OLAP server (Status code: {response.status_code})")
+            raise Exception(f"Error removing cubes from OLAP server. Error details: {get_error_message_from_response(response.content)}")
         else:
             if self.__console_feedback: print("ok")
 
-    def add_export(self, parameters):
-        """Add a new export to the selected model
-
-            Parameters:
-            parameters: Dictionary with all properties required for the import. For more info, check swagger documentation
-
-            Returns:
-            Nothing if operation is sucessfull or an Exception if it fails for any reason
-        """
-        if self.__console_feedback: print(f"Adding new export to currently selected model...", end="")
-
-        # Make sure we have the minimum required properties in the parameters dictionary
-        if parameters.get("Name") is None:
-            if self.__console_feedback: print("failed")
-            raise Exception("Missing required property 'Name'")
-        if parameters.get("Reference") is None:
-            if self.__console_feedback: print("failed")
-            raise Exception("Missing required property 'Reference'")
-        if parameters.get("DataSourceType") is None:
-            if self.__console_feedback: print("failed")
-            raise Exception("Missing required property 'DataSourceType'")
-        if parameters.get("DataSourceParameter") is None:
-            if self.__console_feedback: print("failed")
-            raise Exception("Missing required property 'DataSourceParameter'")
-        if parameters.get("TableName") is None:
-            if self.__console_feedback: print("failed")
-            raise Exception("Missing required property 'TableName'")
-
-        # Get the export template id (if ExportTemplateName is informed)
-        export_template_id = self.__get_export_template_id(parameters.get("ExportTemplateName")) if parameters.get("ExportTemplateName") is not None else -1
-
-        # Store DataSourceType and DataSourceParameter in our helper variables
-        datasource_type = parameters.get("DataSourceType")
-        datasource_parameter = parameters.get("DataSourceParameter")
-
-        # Validate datasource_type
-        if datasource_type < 0 or datasource_type == 6 or datasource_type == 7 or datasource_type > 8:
-            raise Exception("Invalid DataSourceType. Must be either 0, 1, 2, 3, 4, 5 or 8")
-
-        # Validate datasource_parameter (based on datasource_type)
-        if datasource_type == 0 or datasource_type == 1 or datasource_type == 5:
-            # Parameter is and EXCEL, ACCESS or ETL file, so get file it
-            if self.file_exists(datasource_parameter):
-                datasource_parameter = self.__get_file_id(datasource_parameter)
-            else:
-                raise Exception(f"File {datasource_parameter} not found in server for the current logged user")
-
-        # If datasource type is 2 (OLE DB), 3 (SQL Server), 4 (Oracle) or 8 (Shared Files), we just use the
-        # datasource_parameter with no further validation
-
-        # Set URL & parameters(body)
-        url = f"{self.__base_url}/{API_VERSION}/integration/exports"
-        body = {
-            "Name": parameters.get("Name"),
-            "Reference": parameters.get("Reference"),
-            "Description": parameters.get("Description") if parameters.get("Description") is not None else "",
-            "DataSourceType": datasource_type,
-            "DataSourceParameter": str(datasource_parameter),
-            "TableName": parameters.get("TableName") if parameters.get("TableName") is not None else "",
-            "Query": parameters.get("Query") if parameters.get("Query") is not None else "",
-            "ExportTemplateId": export_template_id,
-            "ReplaceData": parameters.get("ReplaceData") if parameters.get("ReplaceData") is not None else True,
-        }
-
-        # Make POST request
-        response = requests.post(url, json=body, headers=self.__get_default_headers())
-
-        # Check response
-        if not CorporateServer.__status_code_ok(response.status_code):
-            if self.__console_feedback: print("failed")
-            raise Exception(f"Error adding export {parameters.get('Name')} (Status code: {response.status_code}. Text: {response.text})")
-        else:
-            if self.__console_feedback: print("ok")
-
-    def export_exists(self, reference):
-        """Check if export exists
-
-            Parameters:
-            reference (string): Reference of the export
-
-            Returns:
-            True if it exists, otherwise False
-        """
-        if self.__console_feedback: print(f"Checking if export exists {reference}...", end="")
-        # Get exports
-        exports = self.__get_exports()
-
-        # Search for desired export (and return True if found)
-        for exp in exports:
-            if exp['Reference'] == reference:
-                if self.__console_feedback: print("yes")
-                return True
-
-        if self.__console_feedback: print("no")
-        return False
-
-    def remove_export(self, reference):
-        """Remove an existing export
-
-            Parameters:
-            reference (string): Reference of the export
-
-            Returns:
-            Nothing if export is removed or an Exception if it fails for any reason
-        """
-        if self.__console_feedback: print(f"Removing export {reference}...", end="")
-
-        # Get export id
-        export_id = self.__get_export_id(reference)
-
-        # Set URL
-        url = f"{self.__base_url}/{API_VERSION}/integration/exports/{export_id}"
-
-        # Make DELETE request
-        response = requests.delete(url, headers=self.__get_default_headers())
-
-        # Check response
-        if not CorporateServer.__status_code_ok(response.status_code):
-            if self.__console_feedback: print("failed");
-            raise Exception(f"Error removing export (Status code: {response.status_code})")
-        else:
-            if self.__console_feedback: print("ok");
-
-    def execute_export(self, reference, notify_by_email, idiom_code, parameters=None):
-        """Execute export (this function is synchronous and will wait for the export to finish executing)
-
-            Parameters:
-            reference (string): Reference of the export
-            notify_by_email (bool): True if email notification should be sent when export finishes executing, False otherwise
-            idiom_code (string): Code of the idiom to be used
-            parameters (optional): parameters to be used in the export
-
-            Returns:
-            Nothing if export is executed or an Exception if it fails for any reason
-        """
-        if self.__console_feedback: print(f"Executing export {reference}...", end="")
-
-        # Get export id
-        export_id = self.__get_export_id(reference)
-
-        # Get idiom id
-        idiom_id = self.__get_idiom_id(idiom_code)
-
-        # Set parameters' values (if informed)
-        parameter_values = parameters if parameters is not None else []
-
-        # Set URL & parameters
-        url = f"{self.__base_url}/{API_VERSION}/integration/exports/{export_id}/execute"
-        body = {"ParametersValue": parameter_values,
-                "OperationDate":  CorporateServer.__get_current_utc_iso8601(),
-                "NotifyByEmail": notify_by_email,
-                "IdiomId": idiom_id if idiom_id != -1 else self.__default_idiom_id}
-
-        # Make POST request
-        response = requests.post(url, json=body, headers=self.__get_default_headers())
-
-        # Check if the request was successful (status code 200)
-        if not CorporateServer.__status_code_ok(response.status_code):
-            if self.__console_feedback: print("failed")
-            raise Exception(f"Error calling execute export (Status code: {response.status_code})")
-
-        # Read operation id (that is returned in response.text)
-        operation_id =  response.text
-
-        # Wait for operation to finish
-        self.__wait_for_operation_to_finish(operation_id)
-
-        if self.__console_feedback: print("ok");
-
-    def scenario_builder(self, src_period_reference, src_scenario_reference, dst_period_reference, dst_scenario_reference, remove_destination_association_before_starting, parameters=None):
+    def scenario_builder(self, src_period_reference, src_scenario_reference, dst_period_reference, dst_scenario_reference, parameters=None):
         """Execute scenario builder
             Parameters:
             src_period_reference (string): Reference of the source period
@@ -2102,7 +2109,7 @@ class CorporateServer:
         # Check response
         if not CorporateServer.__status_code_ok(response.status_code):
             if self.__console_feedback: print("failed")
-            raise Exception(f"Error starting scenario builder (Status code: {response.status_code})")
+            raise Exception(f"Error starting scenario builder. Error details: {get_error_message_from_response(response.content)}")
 
         # Read operation id (that is returned in response.text)
         operation_id = response.text
