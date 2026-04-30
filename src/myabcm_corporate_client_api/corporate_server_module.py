@@ -5,8 +5,8 @@ import uuid
 from datetime import datetime
 from typing import List, Dict
 
-from enums import AbmFactType, LogonResult, AbmDataSourceType, AbmOperationType, AbmOperationStatus
-from error_handler import get_error_message_from_response
+from .enums import AbmFactType, LogonResult, AbmDataSourceType, AbmOperationType, AbmOperationStatus
+from .error_handler import get_error_message_from_response
 import requests
 
 # --------------------------------------------------------------------------------------
