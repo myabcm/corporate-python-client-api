@@ -16,6 +16,11 @@ SEPARATOR_CONSTANT = "\r\r\r\n\r\r\r"
 
 API_VERSION =  "v2"
 
+# Polling retry configuration (used when waiting for operations to finish)
+POLL_MAX_RETRIES = 6                # consecutive failures tolerated before giving up
+POLL_RETRY_DELAY_SECONDS = 5        # wait between retries
+POLL_REQUEST_TIMEOUT_SECONDS = 60   # per-request network timeout
+
 # --------------------------------------------------------------------------------------
 # CorporateServer class
 
@@ -58,12 +63,42 @@ class CorporateServer:
         }
         return headers
 
+    def __call_with_retry(self, func, description,
+                          max_retries=POLL_MAX_RETRIES,
+                          retry_delay=POLL_RETRY_DELAY_SECONDS):
+        """Call `func` and retry on any exception, up to `max_retries` consecutive
+           attempts. Re-raises the last exception only after all attempts fail.
+
+            Parameters:
+            func (callable): The zero-argument callable to invoke
+            description (string): Text used for progress feedback and the final error
+            max_retries (int): Maximum number of consecutive attempts before giving up
+            retry_delay (int): Seconds to wait between attempts
+
+            Returns:
+            Whatever `func` returns on success, or raises an Exception if every
+            attempt fails.
+        """
+        last_ex = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                return func()
+            except Exception as ex:
+                last_ex = ex
+                if attempt < max_retries:
+                    if self.__console_feedback:
+                        print(f"\r{description}...(retry {attempt}/{max_retries - 1})\033[K",
+                              end="", flush=True)
+                    time.sleep(retry_delay)
+        raise Exception(f"{description} failed after {max_retries} attempts. "
+                        f"Last error: {last_ex}") from last_ex
+
     def __get_models(self):
         # Set URL
         url = f"{self.__base_url}/{API_VERSION}/modeling/models"
 
         # Make GET request
-        response = requests.get(url, headers=self.__get_default_headers())
+        response = requests.get(url, headers=self.__get_default_headers(), timeout=POLL_REQUEST_TIMEOUT_SECONDS)
 
         # Check response
         if CorporateServer.__status_code_ok(response.status_code):
@@ -365,11 +400,23 @@ class CorporateServer:
         # Association not found, generate exception
         raise Exception(f"Association {period_reference}/{scenario_reference} not found")
 
-    def __wait_for_operation_to_finish(self, operation_id):
+    def __get_operation_status(self, operation_id):
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/base/operations/{operation_id}/status"
         params = { "cultureInfo" : "en-US" }
 
+        # Make GET request
+        response = requests.get(url, params=params, headers=self.__get_default_headers(), timeout=POLL_REQUEST_TIMEOUT_SECONDS)
+
+        # Check response
+        if CorporateServer.__status_code_ok(response.status_code):
+            # Return JSON with the operation status
+            return response.json()
+        else:
+            # Something got wrong, generate exception
+            raise Exception(f"Error waiting for operation to finish. Error details: {get_error_message_from_response(response.content)}")
+
+    def __wait_for_operation_to_finish(self, operation_id):
         # Setup helper variables to display our "visual progress indicator"
         signs = ["-", "\\", "|", "/",  "-",  "\\",  "|",  "/"]
         sign_pos = 0
@@ -381,23 +428,19 @@ class CorporateServer:
         # Keep checking every 1 second until operation finishes
         condition = False
         while not condition:
-            # Make GET request
-            response = requests.get(url, params=params, headers=self.__get_default_headers())
+            # Get operation status (retried on transient failures)
+            data = self.__call_with_retry(
+                lambda: self.__get_operation_status(operation_id),
+                "Waiting for operation to finish")
 
-            # Check response
-            if CorporateServer.__status_code_ok(response.status_code):
-                data = response.json()
-                # Check status and return if aborted/finished or wait 1 second and try again
-                if data.get("OperationStatus") == AbmOperationStatus.Aborted or data.get("OperationStatus") == AbmOperationStatus.Finished:
-                    condition = True
-                else:
-                    time.sleep(1)
-                    if self.__console_feedback:
-                        print(f"\b\b\b[{signs[sign_pos]}]", end="", flush=True)
-                        sign_pos = sign_pos + 1 if sign_pos < 7 else 0
+            # Check status and return if aborted/finished or wait 1 second and try again
+            if data.get("OperationStatus") == AbmOperationStatus.Aborted or data.get("OperationStatus") == AbmOperationStatus.Finished:
+                condition = True
             else:
-                # Something got wrong, return exception
-                raise Exception(f"Error waiting for operation to finish. Error details: {get_error_message_from_response(response.content)}")
+                time.sleep(2)
+                if self.__console_feedback:
+                    print(f"\b\b\b[{signs[sign_pos]}]", end="", flush=True)
+                    sign_pos = sign_pos + 1 if sign_pos < 7 else 0
 
         # Overwrite our "progress indicator" with spaces
         if self.__console_feedback:
@@ -409,7 +452,7 @@ class CorporateServer:
         params = { "groupId" : group_id, "pending" : False, "cultureInfo": self.__default_idiom_id }
 
         # Make GET request
-        response = requests.get(url, params=params, headers=self.__get_default_headers())
+        response = requests.get(url, params=params, headers=self.__get_default_headers(), timeout=POLL_REQUEST_TIMEOUT_SECONDS)
 
         # Check response
         if CorporateServer.__status_code_ok(response.status_code):
@@ -700,12 +743,15 @@ class CorporateServer:
 
             raise Exception(f"Error removing model. Error details: {get_error_message_from_response(response.content)}")
 
-        # Loop and wait for model to be deleted
+        # Loop and wait for model to be deleted (existence check retried on transient failures)
         condition = True
         while condition:
-            condition = self.__model_exists(reference)
+            condition = self.__call_with_retry(
+                lambda: self.__model_exists(reference),
+                f"Removing model {reference} from server")
+
             if self.__console_feedback: print(".", end= "")
-            time.sleep(1)
+            time.sleep(2)
             if self.__console_feedback: print("\b", end= "")
 
         if self.__console_feedback: print("ok")
@@ -1737,7 +1783,9 @@ class CorporateServer:
         # Wait until all operations in script are executed
         condition = False
         while not condition:
-            operations = self.__get_script_operations_in_group(group_id)
+            operations = self.__call_with_retry(
+                lambda: self.__get_script_operations_in_group(group_id),
+                f"Start script {reference}")
 
             count = len([op for op in operations if AbmOperationStatus.Scheduled <= op.get('OperationStatus') <= AbmOperationStatus.Aborting])
 
