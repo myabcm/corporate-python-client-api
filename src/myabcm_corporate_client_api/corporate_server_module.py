@@ -14,7 +14,7 @@ import requests
 
 SEPARATOR_CONSTANT = "\r\r\r\n\r\r\r"
 
-API_VERSION =  "v2"
+API_VERSION =  "v3"
 
 # Polling retry configuration (used when waiting for operations to finish)
 POLL_MAX_RETRIES = 6                # consecutive failures tolerated before giving up
