@@ -8,6 +8,7 @@ from typing import List, Dict
 from .enums import AbmFactType, LogonResult, AbmDataSourceType, AbmOperationType, AbmOperationStatus
 from .error_handler import get_error_message_from_response
 import requests
+from requests.exceptions import RequestException
 
 # --------------------------------------------------------------------------------------
 # Constants declaration
@@ -20,6 +21,11 @@ API_VERSION =  "v3"
 POLL_MAX_RETRIES = 6                # consecutive failures tolerated before giving up
 POLL_RETRY_DELAY_SECONDS = 5        # wait between retries
 POLL_REQUEST_TIMEOUT_SECONDS = 60   # per-request network timeout
+
+# Upload configuration (a file is sent to the server in chunks)
+UPLOAD_CHUNK_SIZE_BYTES = 200000        # same chunk size the web and desktop clients use
+UPLOAD_REQUEST_TIMEOUT_SECONDS = 120    # per-chunk network timeout
+UPLOAD_MAX_RESUME_ATTEMPTS = 5          # bounded so a link that keeps dropping does not retry forever
 
 # --------------------------------------------------------------------------------------
 # CorporateServer class
@@ -561,6 +567,113 @@ class CorporateServer:
         # Unsupported ETL type
         return None
 
+    def __get_uploaded_bytes(self, file_guid):
+        """How many bytes of a chunked upload the server already holds
+
+            Returns -1 when the answer cannot be trusted, which is also what a server without the
+            endpoint produces, so in that case the caller simply gives up on resuming.
+        """
+        try:
+            url = f"{self.__base_url}/{API_VERSION}/base/files/upload-status"
+
+            response = requests.get(url, params={'fileGuid': file_guid},
+                                    headers=self.__get_default_headers(),
+                                    timeout=POLL_REQUEST_TIMEOUT_SECONDS)
+
+            if not CorporateServer.__status_code_ok(response.status_code):
+                return -1
+
+            data = response.json()
+
+            # Nothing on the server means the upload starts over from the first byte
+            if not data.get('Exists', False):
+                return 0
+
+            return data.get('BytesReceived', -1)
+        except Exception:
+            # Not being able to ask is not an upload failure, it only means this upload cannot be
+            # resumed. Older servers answer 404 here.
+            return -1
+
+    @staticmethod
+    def __is_resumable_upload_failure(ex):
+        """Tells a transport failure, where resuming makes sense, from a server that answered with
+           an error status
+
+            When the server rejected the chunk it already decided about those bytes, so sending them
+            again changes nothing and only wastes the whole transfer. Written as an allowlist on
+            purpose: an exception nobody predicted must not silently become a retry of the entire file.
+        """
+        # RequestException covers connection errors and timeouts raised by requests, OSError covers
+        # a raw socket or file error underneath it
+        return isinstance(ex, (RequestException, OSError))
+
+    def __abort_upload(self, file_guid):
+        """Drops the partial temporary file of an upload that will not be finished"""
+        try:
+            url = f"{self.__base_url}/{API_VERSION}/base/files/upload/{file_guid}"
+
+            requests.delete(url, headers=self.__get_default_headers(),
+                            timeout=POLL_REQUEST_TIMEOUT_SECONDS)
+        except Exception:
+            # Best effort, the server drops the partial file on its own later
+            pass
+
+    def __send_upload_chunks(self, file, url, headers, base_name, file_guid, file_size, file_type,
+                             replace_existing, chunk_size, progress_callback, bytes_already_sent):
+        """Sends the file from its current position to the end, one request per chunk
+
+            Chunks are numbered from the current position, because the server only compares Index
+            against TotalCount - 1 to recognize the last chunk of an upload and ignores where that
+            chunk sits in the file. That is what makes resuming possible.
+
+            Returns True when every chunk was sent, or False when progress_callback stopped it.
+            Raises if a chunk fails, so the caller can decide whether to resume.
+        """
+        bytes_sent = bytes_already_sent
+        remaining = file_size - bytes_sent
+
+        # Ceiling division. An empty file still needs one request, otherwise the server never
+        # assembles it
+        chunk_count = max(1, -(-remaining // chunk_size))
+
+        for chunk_index in range(chunk_count):
+            # Asked before spending the request, so stopping never leaves a half written chunk
+            # behind. Without its last chunk the server never assembles the file.
+            if progress_callback is not None:
+                if progress_callback(base_name, bytes_sent, file_size, chunk_index, chunk_count) is False:
+                    return False
+
+            chunk = file.read(chunk_size)
+
+            # Set chunk & data
+            files =  {
+                'file': (base_name, chunk, 'application/octet-stream')
+            }
+            data = {
+                'chunkMetadata': f"{{\"FileName\": \"{base_name}\", \"Index\": {chunk_index}, \"TotalCount\": {chunk_count}, \"FileSize\": {str(file_size)}, \"FileType\": \"\", \"FileGuid\": \"{file_guid}\"}}",
+                "FileType": file_type,
+                "ReplaceExistingFile": replace_existing,
+                "FileStoreUserId": self.__logged_user_id
+            }
+
+            # Make POST request.
+            # A failed chunk is never resent as is, and this is deliberately NOT wrapped in
+            # __call_with_retry: the server appends whatever arrives, so resending a chunk that
+            # already landed would duplicate its bytes in the assembled file. The caller asks the
+            # server where it stopped before continuing.
+            response = requests.post(url, headers=headers, files=files, data=data,
+                                     timeout=UPLOAD_REQUEST_TIMEOUT_SECONDS)
+
+            # Check response
+            if not CorporateServer.__status_code_ok(response.status_code):
+                raise Exception(f"Error uploading chunk {chunk_index + 1} of {chunk_count} "
+                                f"(Status code: {response.status_code}. Text: {response.text})")
+
+            bytes_sent += len(chunk)
+
+        return True
+
     def logon(self):
         """Logon to MyABCM Corporate using the credentials informed when creating the CorporateServer object
 
@@ -817,17 +930,31 @@ class CorporateServer:
 
         return False
 
-    def upload_file(self, file_name, file_type, replace_existing):
+    def upload_file(self, file_name, file_type, replace_existing,
+                    progress_callback=None, chunk_size=UPLOAD_CHUNK_SIZE_BYTES):
         """Upload file to the server
+
+            The file is sent in chunks, so a large file over a poor connection does not depend on
+            one long request, and so the upload can be stopped between chunks. When a chunk fails,
+            the server is asked how much it already holds and the upload continues from there.
 
             Parameters:
             file_name (string): Complete name of the local file to be uploaded
             file_type (integer): Type of the file (0 = Excel, 1 = Access, 2 = ETL/X, 3 = CSV)
             replace_existing (integer): 1 for replacing existing file or 0 to not replace it
+            progress_callback (callable): Optional, called before each chunk is sent as
+                                          progress_callback(file_name, bytes_sent, total_bytes,
+                                          chunk_index, chunk_count). Return False to stop the
+                                          upload, any other value continues it
+            chunk_size (integer): Size in bytes of each chunk sent to the server
 
             Returns:
-            Nothing if file is uploaded or an Exception if it fails for any reason
+            True if the file is uploaded, False if progress_callback stopped the upload,
+            or an Exception if it fails for any reason
         """
+        if chunk_size <= 0:
+            raise ValueError(f"chunk_size must be greater than zero (got {chunk_size})")
+
         if self.__console_feedback: print(f"Uploading file {file_name}...", end="")
 
         # Set URL
@@ -840,28 +967,61 @@ class CorporateServer:
             'Authorization': f'Bearer {self.__session_token}'
         }
 
-        # Open local file for reading and call the REST API
+        base_name = os.path.basename(file_name)
+        file_size = os.path.getsize(file_name)
+
+        # The server names the temporary file it appends every chunk to after this value, so the
+        # whole file has to travel under a single guid. It stays the same across resume attempts,
+        # as that is what identifies the upload on the server.
+        file_guid = str(uuid.uuid4())
+
+        # Open local file for reading and call the REST API once per chunk
         with open(file_name, 'rb') as file:
-            # Set file & data
-            files =  {
-                'file': (file_name, file, 'multipart/form-data')
-            }
-            data = {
-                'chunkMetadata': f"{{\"FileName\": \"{os.path.basename(file_name)}\", \"Index\": 0, \"TotalCount\": 1, \"FileSize\": {str(os.path.getsize(file_name))}, \"FileType\": \"\", \"FileGuid\": \"{str(uuid.uuid4())}\"}}",
-                "FileType": file_type,
-                "ReplaceExistingFile": replace_existing,
-                "FileStoreUserId": self.__logged_user_id
-            }
+            bytes_sent = 0
+            resume_attempts = 0
 
-            # Make POST request
-            response = requests.post(url, headers=headers, files=files, data=data)
+            while True:
+                try:
+                    if not self.__send_upload_chunks(file, url, headers, base_name, file_guid,
+                                                    file_size, file_type, replace_existing,
+                                                    chunk_size, progress_callback, bytes_sent):
+                        # Stopped on purpose, so free the partial file on the server right away
+                        self.__abort_upload(file_guid)
+                        if self.__console_feedback: print("cancelled")
+                        return False
 
-            # Check response
-            if not CorporateServer.__status_code_ok(response.status_code):
-                if self.__console_feedback: print("failed")
-                raise Exception(f"Error uploading file {file_name} (Status code: {response.status_code}. Text: {response.text})")
-            else:
-                if self.__console_feedback: print("ok")
+                    break
+
+                except Exception as ex:
+                    # The server answering with an error status is a decision about these bytes, not
+                    # a transport hiccup, so it is reported instead of resumed
+                    if not CorporateServer.__is_resumable_upload_failure(ex):
+                        if self.__console_feedback: print("failed")
+                        raise
+
+                    resume_attempts += 1
+
+                    if resume_attempts <= UPLOAD_MAX_RESUME_ATTEMPTS:
+                        uploaded_bytes = self.__get_uploaded_bytes(file_guid)
+                    else:
+                        uploaded_bytes = -1
+
+                    # Resuming needs a server that answered how much it holds and bytes still
+                    # missing to make progress with. Anything else and the failure is reported as
+                    # it always was.
+                    if uploaded_bytes < 0 or uploaded_bytes >= file_size:
+                        if self.__console_feedback: print("failed")
+                        raise
+
+                    bytes_sent = uploaded_bytes
+                    file.seek(bytes_sent)
+
+        # Final report, so a caller following the upload can show it as complete
+        if progress_callback is not None:
+            progress_callback(base_name, file_size, file_size, 1, 1)
+
+        if self.__console_feedback: print("ok")
+        return True
 
     def download_file(self, file_name, local_path):
         """Download file from the server
