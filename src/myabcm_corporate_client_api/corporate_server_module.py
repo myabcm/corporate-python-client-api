@@ -27,6 +27,9 @@ UPLOAD_CHUNK_SIZE_BYTES = 200000        # same chunk size the web and desktop cl
 UPLOAD_REQUEST_TIMEOUT_SECONDS = 120    # per-chunk network timeout
 UPLOAD_MAX_RESUME_ATTEMPTS = 5          # bounded so a link that keeps dropping does not retry forever
 
+# Script operation configuration
+SCRIPT_ASSOCIATION_SELECTION_WHEN_RUNNING = -1   # sentinel stored in A={} when the association is chosen when the script is executed
+
 # --------------------------------------------------------------------------------------
 # CorporateServer class
 
@@ -1782,16 +1785,25 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_fact_to_script(self, script_reference, fact_reference):
+    def add_fact_to_script(self, script_reference, fact_reference, period_scenario_list=None, selection_when_running=False):
         """Add fact to script
 
         Parameters:
-        script_reference (string): Reference of the script where the cube will be added
+        script_reference (string): Reference of the script where the fact will be added
         fact_reference (string): Reference  of the fact
+        period_scenario_list (list): List of period_reference/scenario_reference (fact associations) to be generated.
+                                     If None or empty, all associations of the fact are generated
+        selection_when_running (boolean): True to leave the association to be chosen when the script is executed
+                                          (the default period/scenario informed in execute_script is used).
+                                          Cannot be combined with period_scenario_list
 
         Returns:
         Nothing if fact is added an Exception if it fails for any reason
         """
+
+        # The association list and the selection when running are mutually exclusive
+        if selection_when_running and period_scenario_list:
+            raise Exception("Error adding fact to script. period_scenario_list cannot be informed when selection_when_running is True")
 
         if self.__console_feedback: print(f"Adding fact {fact_reference} to script {script_reference}...", end="")
 
@@ -1801,11 +1813,18 @@ class CorporateServer:
         # Get fact id
         fact_id = self.__get_fact_id(fact_reference, True)
 
+        # Convert period/scenario list into an association id string separated by semicolon
+        # (an empty A={} means all associations of the fact)
+        if selection_when_running:
+            ps_ids = str(SCRIPT_ASSOCIATION_SELECTION_WHEN_RUNNING)
+        else:
+            ps_ids = self.__get_association_list(period_scenario_list if period_scenario_list is not None else [])
+
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
 
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
-        body = { "Operations": [ { "OperationId": 0, "OperationType": 9, "Details": str(fact_id), "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
+        body = { "Operations": [ { "OperationId": 0, "OperationType": 9, "Details": f"F={{{str(fact_id)}}} A={{{ps_ids}}}", "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
 
         # Make POST request
         response = requests.post(url, json=body, headers=self.__get_default_headers())
