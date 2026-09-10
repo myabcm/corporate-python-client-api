@@ -11,6 +11,8 @@ The purpose of this package is to simplify the usage of MyABCM Corporate REST AP
 
 > 0.2.5 and newer versions of this package are compatible with MyABCM Corporate v14 and newer.
 
+> 0.2.9 and newer versions support the import, export and script groups (folders) of MyABCM Corporate. Older 0.2.x versions fail against servers that have this feature.
+
 ## A bit of history
 
 MyABCM Corporate since its first versions, provided a REST API so users could control it from external systems/programs.
@@ -106,10 +108,28 @@ remove_file | Remove a file from user's file store
 &nbsp;  
 &nbsp;  
 
+**Integration groups (folders)**
+
+Imports, exports and scripts can be organized in groups (folders), and a reference is unique only inside its group. Every method that receives an import, export or script reference also accepts an optional group reference (`group_reference`, or `script_group_reference` / `import_group_reference` / `export_group_reference` in the script operation methods). When it is omitted, the item is expected to be outside any group. In **add_import** and **add_export** the group is informed with the optional `ImportGroupReference` / `ExportGroupReference` property of the parameters dictionary.
+
+```python
+# Execute an import that is outside any group
+corporate_server.execute_import("IMP-SALES", False, "en-US", True)
+
+# Execute an import that is inside the group (folder) MONTHLY
+corporate_server.execute_import("IMP-SALES", False, "en-US", True, group_reference="MONTHLY")
+```
+
+&nbsp;  
+&nbsp;  
+
 **Import related methods**
 
 Method | Description
 --- |---
+import_group_exists | Check if an import group (folder) exists
+add_import_group | Add a new import group (folder)
+remove_import_group | Remove an import group (folder)
 import_exists | Check if an import exists
 add_import | Add a new import
 remove_import | Remove an import
@@ -123,6 +143,10 @@ execute_import | Execute import
 
 Method | Description
 --- |---
+export_group_exists | Check if an export group (folder) exists
+add_export_group | Add a new export group (folder)
+remove_export_group | Remove an export group (folder)
+export_exists | Check if an export exists
 add_export | Add a new export
 remove_export | Remove an export
 execute_export | Execute an export
@@ -134,6 +158,9 @@ execute_export | Execute an export
 
 Method | Description
 --- |---
+script_group_exists | Check if a script group (folder) exists
+add_script_group | Add a new script group (folder)
+remove_script_group | Remove a script group (folder)
 add_script | Add a new script
 remove_script | Remove script
 execute_script | Execute script

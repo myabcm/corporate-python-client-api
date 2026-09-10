@@ -30,6 +30,9 @@ UPLOAD_MAX_RESUME_ATTEMPTS = 5          # bounded so a link that keeps dropping 
 # Script operation configuration
 SCRIPT_ASSOCIATION_SELECTION_WHEN_RUNNING = -1   # sentinel stored in A={} when the association is chosen when the script is executed
 
+# Integration groups (folders) configuration
+UNGROUPED_GROUP_ID = -1   # group id the server uses for imports, exports and scripts that are not inside any group
+
 # --------------------------------------------------------------------------------------
 # CorporateServer class
 
@@ -166,24 +169,56 @@ class CorporateServer:
         # Model not found, generate exception
         raise Exception(f"Export template {export_template_name} not found")
 
-    def __get_imports(self):
+    def __get_import_groups(self):
         # Set URL
-        url = f"{self.__base_url}/{API_VERSION}/integration/imports"
+        url = f"{self.__base_url}/{API_VERSION}/integration/import-groups"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
 
         # Check response
         if CorporateServer.__status_code_ok(response.status_code):
-            # We got a JSON with the import list, just return it
+            # We got a JSON with the import group list, just return it
             data = response.json()
             return data
         else:
+            raise Exception(f"Error getting import groups. Error details: {get_error_message_from_response(response.content)}")
+
+    def __get_import_group_id(self, group_reference):
+        # No group reference means the import is not inside any group
+        if group_reference is None:
+            return UNGROUPED_GROUP_ID
+
+        # Get import groups
+        import_groups = self.__get_import_groups()
+
+        # Search for desired import group (and return its ID if found)
+        for import_group in import_groups:
+            if import_group['Reference'] == group_reference:
+                return import_group['Id']
+
+        # Import group not found, generate exception
+        raise Exception(f"Import group {group_reference} not found")
+
+    def __get_imports(self, group_id):
+        # Set URL & parameters (the server lists the imports of one group at a time)
+        url = f"{self.__base_url}/{API_VERSION}/integration/imports"
+        params = { "groupId": group_id }
+
+        # Make GET request
+        response = requests.get(url, params=params, headers=self.__get_default_headers())
+
+        # Check response
+        if CorporateServer.__status_code_ok(response.status_code):
+            # We got a JSON with the groups and the imports of that level, only the imports are needed here
+            data = response.json()
+            return data['Imports']
+        else:
             raise Exception(f"Error getting imports. Error details: {get_error_message_from_response(response.content)}")
 
-    def __get_import_id(self,import_reference):
-        # Get imports
-        imports = self.__get_imports()
+    def __get_import_id(self, import_reference, group_reference=None):
+        # Get imports of the informed group (or the ones outside any group)
+        imports = self.__get_imports(self.__get_import_group_id(group_reference))
 
         # Search for desired import (and return its ID if found)
         for imp in imports:
@@ -191,53 +226,140 @@ class CorporateServer:
                 return imp['Id']
 
         # Import not found, generate exception
-        raise Exception(f"Import {import_reference} not found")
+        if group_reference is None:
+            raise Exception(f"Import {import_reference} not found")
+        else:
+            raise Exception(f"Import {import_reference} not found in group {group_reference}")
 
-    def __get_exports(self):
+    def __get_export_groups(self):
         # Set URL
-        url = f"{self.__base_url}/{API_VERSION}/integration/exports"
+        url = f"{self.__base_url}/{API_VERSION}/integration/export-groups"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
 
         # Check response
         if CorporateServer.__status_code_ok(response.status_code):
-            # We got a JSON with the import list, just return it
+            # We got a JSON with the export group list, just return it
             data = response.json()
             return data
         else:
+            raise Exception(f"Error getting export groups. Error details: {get_error_message_from_response(response.content)}")
+
+    def __get_export_group_id(self, group_reference):
+        # No group reference means the export is not inside any group
+        if group_reference is None:
+            return UNGROUPED_GROUP_ID
+
+        # Get export groups
+        export_groups = self.__get_export_groups()
+
+        # Search for desired export group (and return its ID if found)
+        for export_group in export_groups:
+            if export_group['Reference'] == group_reference:
+                return export_group['Id']
+
+        # Export group not found, generate exception
+        raise Exception(f"Export group {group_reference} not found")
+
+    def __get_exports(self, group_id):
+        # Set URL & parameters (the server lists the exports of one group at a time)
+        url = f"{self.__base_url}/{API_VERSION}/integration/exports"
+        params = { "groupId": group_id }
+
+        # Make GET request
+        response = requests.get(url, params=params, headers=self.__get_default_headers())
+
+        # Check response
+        if CorporateServer.__status_code_ok(response.status_code):
+            # We got a JSON with the groups and the exports of that level, only the exports are needed here
+            data = response.json()
+            return data['Exports']
+        else:
             raise Exception(f"Error getting exports. Error details: {get_error_message_from_response(response.content)}")
 
-    def __get_export_id(self, export_reference):
-        # Get exports
-        imports = self.__get_exports()
+    def __get_export(self, export_id):
+        # Set URL
+        url = f"{self.__base_url}/{API_VERSION}/integration/exports/{export_id}"
+
+        # Make GET request
+        response = requests.get(url, headers=self.__get_default_headers())
+
+        # Check response (the server answers 204 with an empty body when the export does not exist)
+        if response.status_code == 204:
+            raise Exception(f"Export with id {export_id} not found")
+        elif CorporateServer.__status_code_ok(response.status_code):
+            # We got a JSON with the export, just return it
+            data = response.json()
+            return data
+        else:
+            raise Exception(f"Error getting export. Error details: {get_error_message_from_response(response.content)}")
+
+    def __get_export_id(self, export_reference, group_reference=None):
+        # Get exports of the informed group (or the ones outside any group)
+        exports = self.__get_exports(self.__get_export_group_id(group_reference))
 
         # Search for desired export (and return its ID if found)
-        for imp in imports:
-            if imp['Reference'] == export_reference:
-                return imp['Id']
+        for exp in exports:
+            if exp['Reference'] == export_reference:
+                return exp['Id']
 
         # Export not found, generate exception
-        raise Exception(f"Export {export_reference} not found")
+        if group_reference is None:
+            raise Exception(f"Export {export_reference} not found")
+        else:
+            raise Exception(f"Export {export_reference} not found in group {group_reference}")
 
-    def __get_scripts(self):
+    def __get_script_groups(self):
         # Set URL
-        url = f"{self.__base_url}/{API_VERSION}/integration/scripts"
+        url = f"{self.__base_url}/{API_VERSION}/integration/script-groups"
 
         # Make GET request
         response = requests.get(url, headers=self.__get_default_headers())
 
         # Check response
         if CorporateServer.__status_code_ok(response.status_code):
-            # We got a JSON with the import list, just return it
-            data = json.loads(response.text)
+            # We got a JSON with the script group list, just return it
+            data = response.json()
             return data
         else:
-            raise Exception(f"Error getting script. Error details: {get_error_message_from_response(response.content)}")
+            raise Exception(f"Error getting script groups. Error details: {get_error_message_from_response(response.content)}")
 
-    def __get_script_id(self, reference):
-        # Get scripts
-        scripts = self.__get_scripts()
+    def __get_script_group_id(self, group_reference):
+        # No group reference means the script is not inside any group
+        if group_reference is None:
+            return UNGROUPED_GROUP_ID
+
+        # Get script groups
+        script_groups = self.__get_script_groups()
+
+        # Search for desired script group (and return its ID if found)
+        for script_group in script_groups:
+            if script_group['Reference'] == group_reference:
+                return script_group['Id']
+
+        # Script group not found, generate exception
+        raise Exception(f"Script group {group_reference} not found")
+
+    def __get_scripts(self, group_id):
+        # Set URL & parameters (the server lists the scripts of one group at a time)
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts"
+        params = { "groupId": group_id }
+
+        # Make GET request
+        response = requests.get(url, params=params, headers=self.__get_default_headers())
+
+        # Check response
+        if CorporateServer.__status_code_ok(response.status_code):
+            # We got a JSON with the groups and the scripts of that level, only the scripts are needed here
+            data = response.json()
+            return data['Scripts']
+        else:
+            raise Exception(f"Error getting scripts. Error details: {get_error_message_from_response(response.content)}")
+
+    def __get_script_id(self, reference, group_reference=None):
+        # Get scripts of the informed group (or the ones outside any group)
+        scripts = self.__get_scripts(self.__get_script_group_id(group_reference))
 
         # Search for desired script (and return its ID if found)
         for scr in scripts:
@@ -245,7 +367,10 @@ class CorporateServer:
                 return scr['Id']
 
         # Script not found, generate exception
-        raise Exception(f"Script {reference} not found")
+        if group_reference is None:
+            raise Exception(f"Script {reference} not found")
+        else:
+            raise Exception(f"Script {reference} not found in group {group_reference}")
 
     def __get_script_operations(self, script_id):
         # Set URL
@@ -1087,20 +1212,97 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def import_exists(self, reference):
+    def import_group_exists(self, reference):
+        """Check if import group (folder) exists
+
+            Parameters:
+            reference (string): Reference of the import group
+
+            Returns:
+            True if it exists, otherwise False
+        """
+        if self.__console_feedback: print(f"Checking if import group exists {reference}...", end="")
+        # Get import groups
+        import_groups = self.__get_import_groups()
+
+        # Search for desired import group (and return True if found)
+        for import_group in import_groups:
+            if import_group['Reference'] == reference:
+                if self.__console_feedback: print("yes")
+                return True
+
+        if self.__console_feedback: print("no")
+        return False
+
+    def add_import_group(self, name, reference, description):
+        """Add a new import group (folder) to the selected model
+
+            Parameters:
+            name (string): Name of the import group
+            reference (string): Reference of the import group
+            description (string): Description of the import group
+
+            Returns:
+            Nothing if import group is created or an Exception if it fails for any reason
+        """
+        if self.__console_feedback: print(f"Adding new import group {name} ({reference})...", end="")
+
+        # Set URL & parameters
+        url = f"{self.__base_url}/{API_VERSION}/integration/import-groups"
+        body = { "Name": name, "Reference": reference, "Description": description }
+
+        # Make POST request
+        response = requests.post(url, json=body, headers=self.__get_default_headers())
+
+        # Check response
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed")
+            raise Exception(f"Error creating import group. Error details: {get_error_message_from_response(response.content)}")
+        else:
+            if self.__console_feedback: print("ok")
+
+    def remove_import_group(self, reference):
+        """Remove an existing import group (folder)
+
+            Parameters:
+            reference (string): Reference of the import group
+
+            Returns:
+            Nothing if import group is removed or an Exception if it fails for any reason
+        """
+        if self.__console_feedback: print(f"Removing import group {reference}...", end="")
+
+        # Get import group id
+        import_group_id = self.__get_import_group_id(reference)
+
+        # Set URL
+        url = f"{self.__base_url}/{API_VERSION}/integration/import-groups/{import_group_id}"
+
+        # Make DELETE request
+        response = requests.delete(url, headers=self.__get_default_headers())
+
+        # Check response
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed")
+            raise Exception(f"Error removing import group. Error details: {get_error_message_from_response(response.content)}")
+        else:
+            if self.__console_feedback: print("ok")
+
+    def import_exists(self, reference, group_reference=None):
         """Check if import exists
 
             Parameters:
             reference (string): Reference of the import
+            group_reference (string, optional): Reference of the group (folder) that contains the import. Omit for imports outside any group
 
             Returns:
             True if it exists, otherwise False
         """
         if self.__console_feedback: print(f"Checking if import exists {reference}...", end="")
-        # Get imports
-        imports = self.__get_imports()
+        # Get imports of the informed group (or the ones outside any group)
+        imports = self.__get_imports(self.__get_import_group_id(group_reference))
 
-        # Search for desired import (and return its ID if found)
+        # Search for desired import (and return True if found)
         for imp in imports:
             if imp['Reference'] == reference:
                 if self.__console_feedback: print("yes")
@@ -1113,7 +1315,8 @@ class CorporateServer:
         """Add a new import to the selected model
 
             Parameters:
-            parameters: Dictionary with all properties required for the import. For more info, check swagger documentation
+            parameters: Dictionary with all properties required for the import. For more info, check swagger documentation.
+                        The optional property "ImportGroupReference" places the import inside an existing group (folder)
 
             Returns:
             Nothing if operation is successful or an Exception if it fails for any reason
@@ -1133,6 +1336,9 @@ class CorporateServer:
         if parameters.get("DataSourceParameter") is None:
             if self.__console_feedback: print("failed")
             raise Exception("Missing required property 'DataSourceParameter'")
+
+        # Get the import group id (if ImportGroupReference is informed, otherwise the import is created outside any group)
+        import_group_id = self.__get_import_group_id(parameters.get("ImportGroupReference"))
 
         # Store DataSourceType and DataSourceParameter in our helper variables
         datasource_type = parameters.get("DataSourceType")
@@ -1174,6 +1380,7 @@ class CorporateServer:
             "Name": parameters.get("Name"),
             "Reference": parameters.get("Reference"),
             "Description": parameters.get("Description") if parameters.get("Description") is not None else "",
+            "ImportGroupId": import_group_id,
             "DataSourceType": datasource_type,
             "DataSourceParameter": str(datasource_parameter),
             "Dimensions": parameters.get("Dimensions") if parameters.get("Dimensions") is not None else "",
@@ -1231,7 +1438,7 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def execute_import(self, reference, notify_by_email, idiom_code, use_transaction):
+    def execute_import(self, reference, notify_by_email, idiom_code, use_transaction, group_reference=None):
         """Execute import (this function is synchronous and will wait for the imported to finish executing)
 
         Parameters:
@@ -1239,6 +1446,7 @@ class CorporateServer:
         notify_by_email (boolean): True for the user to be notified by email when the import ends or False for the user not to be notified
         idiom_code (string): Code of the idiom to be used
         use_transaction (boolean): True for using a transaction or False for not using a transaction
+        group_reference (string, optional): Reference of the group (folder) that contains the import. Omit for imports outside any group
 
         Returns:
         Nothing if import is executed or an Exception if it fails for any reason
@@ -1246,7 +1454,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Execute import {reference}...", end="")
 
         # Get import id
-        import_id = self.__get_import_id(reference)
+        import_id = self.__get_import_id(reference, group_reference)
 
         #Get Idiom id
         idiom_id = self.__get_idiom_id(idiom_code)
@@ -1274,11 +1482,12 @@ class CorporateServer:
 
         if self.__console_feedback: print("ok");
 
-    def remove_import(self, reference):
+    def remove_import(self, reference, group_reference=None):
         """Remove an existing import
 
             Parameters:
             reference (string): Reference of the import
+            group_reference (string, optional): Reference of the group (folder) that contains the import. Omit for imports outside any group
 
             Returns:
             Nothing if import is removed or an Exception if it fails for any reason
@@ -1286,7 +1495,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Remove import {reference}...", end="")
 
         # Get import id
-        import_id = self.__get_import_id(reference)
+        import_id = self.__get_import_id(reference, group_reference)
 
         # Set URL
         url = f"{self.__base_url}/{API_VERSION}/integration/imports/{import_id}"
@@ -1301,11 +1510,88 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok");
 
+    def export_group_exists(self, reference):
+        """Check if export group (folder) exists
+
+            Parameters:
+            reference (string): Reference of the export group
+
+            Returns:
+            True if it exists, otherwise False
+        """
+        if self.__console_feedback: print(f"Checking if export group exists {reference}...", end="")
+        # Get export groups
+        export_groups = self.__get_export_groups()
+
+        # Search for desired export group (and return True if found)
+        for export_group in export_groups:
+            if export_group['Reference'] == reference:
+                if self.__console_feedback: print("yes")
+                return True
+
+        if self.__console_feedback: print("no")
+        return False
+
+    def add_export_group(self, name, reference, description):
+        """Add a new export group (folder) to the selected model
+
+            Parameters:
+            name (string): Name of the export group
+            reference (string): Reference of the export group
+            description (string): Description of the export group
+
+            Returns:
+            Nothing if export group is created or an Exception if it fails for any reason
+        """
+        if self.__console_feedback: print(f"Adding new export group {name} ({reference})...", end="")
+
+        # Set URL & parameters
+        url = f"{self.__base_url}/{API_VERSION}/integration/export-groups"
+        body = { "Name": name, "Reference": reference, "Description": description }
+
+        # Make POST request
+        response = requests.post(url, json=body, headers=self.__get_default_headers())
+
+        # Check response
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed")
+            raise Exception(f"Error creating export group. Error details: {get_error_message_from_response(response.content)}")
+        else:
+            if self.__console_feedback: print("ok")
+
+    def remove_export_group(self, reference):
+        """Remove an existing export group (folder)
+
+            Parameters:
+            reference (string): Reference of the export group
+
+            Returns:
+            Nothing if export group is removed or an Exception if it fails for any reason
+        """
+        if self.__console_feedback: print(f"Removing export group {reference}...", end="")
+
+        # Get export group id
+        export_group_id = self.__get_export_group_id(reference)
+
+        # Set URL
+        url = f"{self.__base_url}/{API_VERSION}/integration/export-groups/{export_group_id}"
+
+        # Make DELETE request
+        response = requests.delete(url, headers=self.__get_default_headers())
+
+        # Check response
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed")
+            raise Exception(f"Error removing export group. Error details: {get_error_message_from_response(response.content)}")
+        else:
+            if self.__console_feedback: print("ok")
+
     def add_export(self, parameters):
         """Add a new export to the selected model
 
             Parameters:
-            parameters: Dictionary with all properties required for the import. For more info, check swagger documentation
+            parameters: Dictionary with all properties required for the export. For more info, check swagger documentation.
+                        The optional property "ExportGroupReference" places the export inside an existing group (folder)
 
             Returns:
             Nothing if operation is successful or an Exception if it fails for any reason
@@ -1333,6 +1619,9 @@ class CorporateServer:
         export_template_id = self.__get_export_template_id(parameters.get("ExportTemplateName")) if parameters.get(
             "ExportTemplateName") is not None else -1
 
+        # Get the export group id (if ExportGroupReference is informed, otherwise the export is created outside any group)
+        export_group_id = self.__get_export_group_id(parameters.get("ExportGroupReference"))
+
         # Store DataSourceType and DataSourceParameter in our helper variables
         datasource_type = parameters.get("DataSourceType")
         datasource_parameter = parameters.get("DataSourceParameter")
@@ -1358,6 +1647,7 @@ class CorporateServer:
             "Name": parameters.get("Name"),
             "Reference": parameters.get("Reference"),
             "Description": parameters.get("Description") if parameters.get("Description") is not None else "",
+            "ExportGroupId": export_group_id,
             "DataSourceType": datasource_type,
             "DataSourceParameter": str(datasource_parameter),
             "TableName": parameters.get("TableName") if parameters.get("TableName") is not None else "",
@@ -1377,18 +1667,19 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def export_exists(self, reference):
+    def export_exists(self, reference, group_reference=None):
         """Check if export exists
 
             Parameters:
             reference (string): Reference of the export
+            group_reference (string, optional): Reference of the group (folder) that contains the export. Omit for exports outside any group
 
             Returns:
             True if it exists, otherwise False
         """
         if self.__console_feedback: print(f"Checking if export exists {reference}...", end="")
-        # Get exports
-        exports = self.__get_exports()
+        # Get exports of the informed group (or the ones outside any group)
+        exports = self.__get_exports(self.__get_export_group_id(group_reference))
 
         # Search for desired export (and return True if found)
         for exp in exports:
@@ -1399,11 +1690,12 @@ class CorporateServer:
         if self.__console_feedback: print("no")
         return False
 
-    def remove_export(self, reference):
+    def remove_export(self, reference, group_reference=None):
         """Remove an existing export
 
             Parameters:
             reference (string): Reference of the export
+            group_reference (string, optional): Reference of the group (folder) that contains the export. Omit for exports outside any group
 
             Returns:
             Nothing if export is removed or an Exception if it fails for any reason
@@ -1411,7 +1703,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Removing export {reference}...", end="")
 
         # Get export id
-        export_id = self.__get_export_id(reference)
+        export_id = self.__get_export_id(reference, group_reference)
 
         # Set URL
         url = f"{self.__base_url}/{API_VERSION}/integration/exports/{export_id}"
@@ -1427,7 +1719,7 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok");
 
-    def execute_export(self, reference, notify_by_email, idiom_code, parameters=None):
+    def execute_export(self, reference, notify_by_email, idiom_code, parameters=None, group_reference=None):
         """Execute export (this function is synchronous and will wait for the export to finish executing)
 
             Parameters:
@@ -1435,6 +1727,7 @@ class CorporateServer:
             notify_by_email (bool): True if email notification should be sent when export finishes executing, False otherwise
             idiom_code (string): Code of the idiom to be used
             parameters (optional): parameters to be used in the export
+            group_reference (string, optional): Reference of the group (folder) that contains the export. Omit for exports outside any group
 
             Returns:
             Nothing if export is executed or an Exception if it fails for any reason
@@ -1442,7 +1735,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Executing export {reference}...", end="")
 
         # Get export id
-        export_id = self.__get_export_id(reference)
+        export_id = self.__get_export_id(reference, group_reference)
 
         # Get idiom id
         idiom_id = self.__get_idiom_id(idiom_code)
@@ -1474,22 +1767,102 @@ class CorporateServer:
 
         if self.__console_feedback: print("ok");
 
-    def add_script(self, name, reference, description):
+    def script_group_exists(self, reference):
+        """Check if script group (folder) exists
+
+            Parameters:
+            reference (string): Reference of the script group
+
+            Returns:
+            True if it exists, otherwise False
+        """
+        if self.__console_feedback: print(f"Checking if script group exists {reference}...", end="")
+        # Get script groups
+        script_groups = self.__get_script_groups()
+
+        # Search for desired script group (and return True if found)
+        for script_group in script_groups:
+            if script_group['Reference'] == reference:
+                if self.__console_feedback: print("yes")
+                return True
+
+        if self.__console_feedback: print("no")
+        return False
+
+    def add_script_group(self, name, reference, description):
+        """Add a new script group (folder) to the selected model
+
+            Parameters:
+            name (string): Name of the script group
+            reference (string): Reference of the script group
+            description (string): Description of the script group
+
+            Returns:
+            Nothing if script group is created or an Exception if it fails for any reason
+        """
+        if self.__console_feedback: print(f"Adding new script group {name} ({reference})...", end="")
+
+        # Set URL & parameters
+        url = f"{self.__base_url}/{API_VERSION}/integration/script-groups"
+        body = { "Name": name, "Reference": reference, "Description": description }
+
+        # Make POST request
+        response = requests.post(url, json=body, headers=self.__get_default_headers())
+
+        # Check response
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed")
+            raise Exception(f"Error creating script group. Error details: {get_error_message_from_response(response.content)}")
+        else:
+            if self.__console_feedback: print("ok")
+
+    def remove_script_group(self, reference):
+        """Remove an existing script group (folder)
+
+            Parameters:
+            reference (string): Reference of the script group
+
+            Returns:
+            Nothing if script group is removed or an Exception if it fails for any reason
+        """
+        if self.__console_feedback: print(f"Removing script group {reference}...", end="")
+
+        # Get script group id
+        script_group_id = self.__get_script_group_id(reference)
+
+        # Set URL
+        url = f"{self.__base_url}/{API_VERSION}/integration/script-groups/{script_group_id}"
+
+        # Make DELETE request
+        response = requests.delete(url, headers=self.__get_default_headers())
+
+        # Check response
+        if not CorporateServer.__status_code_ok(response.status_code):
+            if self.__console_feedback: print("failed")
+            raise Exception(f"Error removing script group. Error details: {get_error_message_from_response(response.content)}")
+        else:
+            if self.__console_feedback: print("ok")
+
+    def add_script(self, name, reference, description, group_reference=None):
         """Add a new script
 
             Parameters:
             name (string): Name of the script
             reference (string): Reference of the script
             description (string): Description of the script
+            group_reference (string, optional): Reference of the group (folder) where the script is created. Omit to create it outside any group
 
             Returns:
             Nothing if script is created or an Exception if it fails for any reason
         """
         if self.__console_feedback: print(f"Adding new script {name} ({reference})...", end="")
 
+        # Get the script group id (if group_reference is informed, otherwise the script is created outside any group)
+        script_group_id = self.__get_script_group_id(group_reference)
+
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts"
-        body = { "Name": name, "Reference": reference, "Description": description }
+        body = { "Name": name, "Reference": reference, "Description": description, "ScriptGroupId": script_group_id }
 
         # Make GET request
         response = requests.post(url, json=body, headers=self.__get_default_headers())
@@ -1502,11 +1875,12 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def remove_script(self, reference):
+    def remove_script(self, reference, group_reference=None):
         """Remove an existing script
 
             Parameters:
             reference (string): Reference of the script
+            group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
 
             Returns:
             Nothing if script is removed or an Exception if it fails for any reason
@@ -1514,7 +1888,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Removing script {reference} from model...", end="")
 
         # Get script id
-        script_id = self.__get_script_id(reference)
+        script_id = self.__get_script_id(reference, group_reference)
 
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts"
@@ -1531,13 +1905,14 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_md_cube_to_script(self, script_reference, cube_reference, force_reprocessing):
+    def add_md_cube_to_script(self, script_reference, cube_reference, force_reprocessing, script_group_reference=None):
         """Add multidimensional cube to script
 
             Parameters:
             script_reference (string): Reference of the script where the cube will be added
             cube_reference (string): Reference of the cube to be added
             force_reprocessing (boolean): Indicates if the cube has to be completely reprocessing
+            script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
 
             Returns:
             Nothing if cube is added an Exception if it fails for any reason
@@ -1545,7 +1920,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Adding multidimensional cube {cube_reference} to script {script_reference}...", end="")
 
         # Get script id
-        script_id = self.__get_script_id(script_reference)
+        script_id = self.__get_script_id(script_reference, script_group_reference)
 
         # Get cube id
         cube_id = self.__get_cube_id(cube_reference)
@@ -1566,7 +1941,7 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_tb_cube_to_script(self, script_reference, cube_reference, processing_type, period_scenario_list=None):
+    def add_tb_cube_to_script(self, script_reference, cube_reference, processing_type, period_scenario_list=None, script_group_reference=None):
         """Add tabular cube to script
 
             Parameters:
@@ -1578,6 +1953,7 @@ class CorporateServer:
                                     2: Reprocess current cube facts and its dimensions
                                     3: Reprocess current cube facts, its dimensions and related cubes
             period_scenario_list (list) : List of period_reference/scenario_reference to be processed
+            script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
 
             Returns:
             Nothing if cube is added an Exception if it fails for any reason
@@ -1585,7 +1961,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Adding tabular cube {cube_reference} to script {script_reference}...", end="")
 
         # Get script id
-        script_id = self.__get_script_id(script_reference)
+        script_id = self.__get_script_id(script_reference, script_group_reference)
 
         # Get cube id
         cube_id = self.__get_cube_id(cube_reference)
@@ -1609,12 +1985,14 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_export_to_script(self, script_reference, export_reference):
-        """Add export cube to script
+    def add_export_to_script(self, script_reference, export_reference, script_group_reference=None, export_group_reference=None):
+        """Add export to script
 
             Parameters:
-            script_reference (string): Reference of the script where the cube will be added
+            script_reference (string): Reference of the script where the export will be added
             export_reference (string): Reference of the export to be added
+            script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
+            export_group_reference (string, optional): Reference of the group (folder) that contains the export. Omit for exports outside any group
 
             Returns:
             Nothing if export is added an Exception if it fails for any reason
@@ -1622,10 +2000,10 @@ class CorporateServer:
         if self.__console_feedback: print(f"Adding export {export_reference} to script {script_reference}...", end="")
 
         # Get script id
-        script_id = self.__get_script_id(script_reference)
+        script_id = self.__get_script_id(script_reference, script_group_reference)
 
         # Get export id
-        export_id = self.__get_export_id(export_reference)
+        export_id = self.__get_export_id(export_reference, export_group_reference)
 
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
@@ -1642,12 +2020,14 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_import_to_script(self, script_reference, import_reference):
-        """Add import cube to script
+    def add_import_to_script(self, script_reference, import_reference, script_group_reference=None, import_group_reference=None):
+        """Add import to script
 
             Parameters:
-            script_reference (string): Reference of the script where the cube will be added
+            script_reference (string): Reference of the script where the import will be added
             import_reference (string): Reference of the import to be added
+            script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
+            import_group_reference (string, optional): Reference of the group (folder) that contains the import. Omit for imports outside any group
 
             Returns:
             Nothing if import is added an Exception if it fails for any reason
@@ -1655,10 +2035,10 @@ class CorporateServer:
         if self.__console_feedback: print(f"Adding import {import_reference} to script {script_reference}...", end="")
 
         # Get script id
-        script_id = self.__get_script_id(script_reference)
+        script_id = self.__get_script_id(script_reference, script_group_reference)
 
         # Get import id
-        import_id = self.__get_import_id(import_reference)
+        import_id = self.__get_import_id(import_reference, import_group_reference)
 
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
@@ -1675,12 +2055,13 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_model_calculation_to_script(self, script_reference, period_scenario_list):
+    def add_model_calculation_to_script(self, script_reference, period_scenario_list, script_group_reference=None):
         """Add calculation operation to script
 
         Parameters:
-        script_reference (string): Reference of the script where the cube will be added
+        script_reference (string): Reference of the script where the calculation will be added
         period_scenario_list (list): List of period/scenario references
+        script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
 
         Returns:
         Nothing if calculation is added an Exception if it fails for any reason
@@ -1689,7 +2070,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Adding calculation to script...", end="")
 
         # Get script id
-        script_id = self.__get_script_id(script_reference)
+        script_id = self.__get_script_id(script_reference, script_group_reference)
 
         # Convert period/scenario list into an association id string separated by comma
         ps_ids = self.__get_association_list(period_scenario_list)
@@ -1709,12 +2090,14 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_etlx_file_to_script(self, script_reference, etlx_filename, is_shared_file):
+    def add_etlx_file_to_script(self, script_reference, etlx_filename, is_shared_file, script_group_reference=None):
         """Add ETLX file processing to script
 
             Parameters:
-            script_reference (string): Reference of the script where the cube will be added
+            script_reference (string): Reference of the script where the ETLX file will be added
             etlx_filename (string): Name of the ETLX file
+            is_shared_file (boolean): True if the file is in the shared file store, False if it is in the user's file store
+            script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
 
             Returns:
             Nothing if ETLX file is added an Exception if it fails for any reason
@@ -1730,7 +2113,7 @@ class CorporateServer:
             details =  "1" + SEPARATOR_CONSTANT + str(file_id) + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "False" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT
 
         # Get script id
-        script_id = self.__get_script_id(script_reference)
+        script_id = self.__get_script_id(script_reference, script_group_reference)
 
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
@@ -1748,16 +2131,17 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_etlx_database_to_script(self, script_reference, server, database, integrated_security, username, password):
+    def add_etlx_database_to_script(self, script_reference, server, database, integrated_security, username, password, script_group_reference=None):
         """Add ETLX database processing to script
 
             Parameters:
-            script_reference (string): Reference of the script where the cube will be added
+            script_reference (string): Reference of the script where the ETLX database will be added
             server (string): Server name
             database (string): Database name
             integrated_security (boolean): True for using integrated security, otherwise False
             username (string): Username
             password (string): Password
+            script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
 
             Returns:
             Nothing if ETLX database is added an Exception if it fails for any reason
@@ -1766,7 +2150,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Adding ETLX database {database} to script {script_reference}...", end="")
 
         # Get script id
-        script_id = self.__get_script_id(script_reference)
+        script_id = self.__get_script_id(script_reference, script_group_reference)
 
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
@@ -1785,7 +2169,7 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_fact_to_script(self, script_reference, fact_reference, period_scenario_list=None, selection_when_running=False):
+    def add_fact_to_script(self, script_reference, fact_reference, period_scenario_list=None, selection_when_running=False, script_group_reference=None):
         """Add fact to script
 
         Parameters:
@@ -1796,6 +2180,7 @@ class CorporateServer:
         selection_when_running (boolean): True to leave the association to be chosen when the script is executed
                                           (the default period/scenario informed in execute_script is used).
                                           Cannot be combined with period_scenario_list
+        script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
 
         Returns:
         Nothing if fact is added an Exception if it fails for any reason
@@ -1808,7 +2193,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Adding fact {fact_reference} to script {script_reference}...", end="")
 
         # Get script id
-        script_id = self.__get_script_id(script_reference)
+        script_id = self.__get_script_id(script_reference, script_group_reference)
 
         # Get fact id
         fact_id = self.__get_fact_id(fact_reference, True)
@@ -1836,7 +2221,7 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def execute_script(self, reference, notify_by_email, idiom_code, period_scenario, parameters):
+    def execute_script(self, reference, notify_by_email, idiom_code, period_scenario, parameters, group_reference=None):
         """Execute a script (this function is executed synchronously ONLY if the script has 1 or more
            operations that are not exports. If all operations in the script are exports, it will
            execute asynchronously)
@@ -1847,6 +2232,7 @@ class CorporateServer:
             idiom_code (string): Code of the idiom to be used
             period_scenario (string): reference of the default period / scenario (i.e.: JAN/ACTUAL)
             parameters (array): string array with the script parameters for possible exports/etl packages
+            group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
 
             Returns:
             Nothing if a script starts execution or an Exception if it fails for any reason
@@ -1854,7 +2240,7 @@ class CorporateServer:
         if self.__console_feedback: print(f"Start script {reference}...", end="")
 
         # Get script id
-        script_id = self.__get_script_id(reference)
+        script_id = self.__get_script_id(reference, group_reference)
 
         #Get idiom id
         idiom_id = self.__get_idiom_id(idiom_code)
@@ -1898,13 +2284,11 @@ class CorporateServer:
                     operation_details = str(operation.get("Details", ""))
 
                     if operation_type == AbmOperationType.Export and not is_etl_token:
-                        # Export operation: match by export id
-                        try:
-                            export_id = self.__get_export_id(object_id)
-                        except Exception:
-                            raise Exception(f"Export '{object_id}' not found.")
+                        # Export operation: the details hold the export id, so read that export and match by reference
+                        # (this finds the export whatever group it is in)
+                        export = self.__get_export(operation_details)
 
-                        if export_id is not None and str(export_id) == operation_details:
+                        if export['Reference'] == object_id:
                             script_parameters.append(
                                 {
                                     "ScriptOperationId": operation_id,
