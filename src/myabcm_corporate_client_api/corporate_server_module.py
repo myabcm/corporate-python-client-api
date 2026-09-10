@@ -387,6 +387,23 @@ class CorporateServer:
         else:
             raise Exception(f"Error getting script operations. Error details: {get_error_message_from_response(response.content)}")
 
+    def __get_script_runtime_associations(self, script_id):
+        # Set URL
+        url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/runtime-associations"
+
+        # Make GET request
+        response = requests.get(url, headers=self.__get_default_headers())
+
+        # Check response (servers older than the runtime association feature do not have this route)
+        if response.status_code == 404:
+            return { "Required": False, "Associations": [] }
+        elif CorporateServer.__status_code_ok(response.status_code):
+            # We got a JSON telling if an association is required and which ones may be used
+            data = response.json()
+            return data
+        else:
+            raise Exception(f"Error getting script runtime associations. Error details: {get_error_message_from_response(response.content)}")
+
     def __get_cubes(self):
         # Set URL
         url = f"{self.__base_url}/{API_VERSION}/analysis/cubes"
@@ -505,6 +522,23 @@ class CorporateServer:
             # Something got wrong, return exception
             raise Exception(f"Error getting and storing user details. Error details: {get_error_message_from_response(response.content)}")
 
+    def __store_selected_model(self):
+        # Set URL
+        url = f"{self.__base_url}/{API_VERSION}/modeling/models/selected"
+
+        # Make GET request
+        response = requests.get(url, headers=self.__get_default_headers())
+
+        # Check response (the server answers 204 with an empty body when the session has no model selected)
+        if response.status_code == 204:
+            self.__selected_model_id = -1
+        elif CorporateServer.__status_code_ok(response.status_code):
+            # Store the id of the model already selected in this session
+            data = response.json()
+            self.__selected_model_id = data.get("Id")
+        else:
+            raise Exception(f"Error getting selected model. Error details: {get_error_message_from_response(response.content)}")
+
     def __get_available_associations(self):
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/modeling/models/available-associations"
@@ -533,6 +567,17 @@ class CorporateServer:
 
         # Association not found, generate exception
         raise Exception(f"Association {period_reference}/{scenario_reference} not found")
+
+    def __get_default_association_id(self, period_scenario):
+        # The period/scenario may be informed by reference (documented) or by name (older scripts)
+        for association in self.__get_available_associations():
+            by_reference = f"{association.get('PeriodReference')}/{association.get('ScenarioReference')}"
+            by_name = f"{association.get('PeriodName')}/{association.get('ScenarioName')}"
+            if period_scenario.upper() in (by_reference.upper(), by_name.upper()):
+                return association.get("Id")
+
+        # Association not found, generate exception
+        raise Exception(f"Period/scenario {period_scenario} not found")
 
     def __get_operation_status(self, operation_id):
         # Set URL & parameters
@@ -630,70 +675,55 @@ class CorporateServer:
 
         return found_id
 
-    def __build_etl_details(self, etl_object_id):
-        """Build ETL operation details string from token
+    def __etl_operation_matches(self, operation_details, etl_token):
+        """Check if a script ETL operation runs the ETL package named in an execute_script parameter
 
             Parameters:
-            etl_object_id (string): ETL token (ex: "1;FILE.etlx" or "2;server;db;true;user;pass")
+            operation_details (string): Details stored in the script operation. The server stores the fields separated
+                                        by SEPARATOR_CONSTANT in this order: type, file id, server, database,
+                                        integrated security, user, password and shared file name
+            etl_token (string): ETL part of the parameter ("1;FILE.etlx", "1;FILE.etlx;SHARED" or
+                                "2;server;database;integrated_security;user;password")
 
             Returns:
-            string: Details string expected by server or None if token is invalid
+            True if the operation runs that ETL package, otherwise False
         """
+        etl_params = [param.strip() for param in etl_token.split(";")]
+        etl_type = etl_params[0]
 
-        # Break down the etl_object_id into an etl_params array
-        etl_params = etl_object_id.split(";")
-
-        # We should have more than 1 element in the array, if not, just return None
-        if len(etl_params) <= 1:
-            return None
-
-        # Remove possible leading/trailing spaces from the string
-        etl_type = etl_params[0].strip()
+        # Every ETL operation stores at least the first 7 fields
+        fields = [field.strip() for field in operation_details.split(SEPARATOR_CONSTANT)]
+        if len(fields) < 7:
+            return False
 
         if etl_type == "1":
-            # ETL File (shared or server file)
-            if len(etl_params) < 2:
-                raise Exception(f"Invalid parameters '{etl_object_id}' to EtlPackage operation.")
+            # ETL file: a file store file is identified by its id, a shared file by its name (eighth field)
+            if len(etl_params) < 2 or etl_params[1] == "":
+                raise Exception(f"FileName parameter '{etl_token}' is invalid.")
 
-            file_name = etl_params[1].strip()
-            if file_name == "":
-                raise Exception(f"FileName parameter '{etl_object_id}' is invalid.")
+            file_name = etl_params[1]
+            is_shared_file = (len(etl_params) == 3 and etl_params[2].upper() == "SHARED")
 
-            is_shared_file = (len(etl_params) == 3 and etl_params[2].strip().upper() == "SHARED")
-
+            if fields[0] != "1":
+                return False
             if is_shared_file:
-                etl_details = file_name
+                return len(fields) >= 8 and fields[7].upper() == file_name.upper()
             else:
-                etl_details = str(self.__get_file_id(file_name))
-
-            # Build details string expected by server
-            return (
-                    "1" + SEPARATOR_CONSTANT + etl_details + SEPARATOR_CONSTANT + "" +
-                    SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "False" + SEPARATOR_CONSTANT +
-                    "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT
-            )
+                return fields[1] == str(self.__get_file_id(file_name))
 
         if etl_type == "2":
-            # ETL Database
+            # ETL database: identified by server, database and user
             if len(etl_params) != 6:
-                raise Exception(f"Invalid parameters '{etl_object_id}' to EtlPackage operation.")
+                raise Exception(f"Invalid parameters '{etl_token}' to EtlPackage operation.")
 
-            server_name = etl_params[1].strip()
-            database_name = etl_params[2].strip()
-            integrated_security = etl_params[3].strip()
-            user_name = etl_params[4].strip()
-            user_password = etl_params[5].strip()
+            server_name = etl_params[1]
+            database_name = etl_params[2]
+            user_name = etl_params[4]
 
-            # Build details string expected by server
-            return (
-                    "2" + SEPARATOR_CONSTANT + "0" + SEPARATOR_CONSTANT + server_name +
-                    SEPARATOR_CONSTANT + database_name + SEPARATOR_CONSTANT + integrated_security +
-                    SEPARATOR_CONSTANT + user_name + SEPARATOR_CONSTANT + user_password +
-                    SEPARATOR_CONSTANT
-            )
+            return fields[0] == "2" and fields[2].upper() == server_name.upper() and fields[3].upper() == database_name.upper() and fields[5].upper() == user_name.upper()
 
         # Unsupported ETL type
-        return None
+        return False
 
     def __get_uploaded_bytes(self, file_guid):
         """How many bytes of a chunked upload the server already holds
@@ -811,6 +841,8 @@ class CorporateServer:
         if self.__instance_with_token:
             if self.__console_feedback: print(f"Logging on with token {self.__session_token}...", end="")
             self.__store_logged_user_details()
+            # The session behind the token may already have a model selected, so pick it up here
+            self.__store_selected_model()
         else:
             if self.__console_feedback: print(f"Logging on to {self.__base_url} using user {self.__login_name}...", end="")
 
@@ -2230,7 +2262,8 @@ class CorporateServer:
             reference (string): Reference of the script
             notify_by_email (boolean): Indicates if an email notification should be sent to the user after the script execution
             idiom_code (string): Code of the idiom to be used
-            period_scenario (string): reference of the default period / scenario (i.e.: JAN/ACTUAL)
+            period_scenario (string): reference (or name) of the default period/scenario (i.e.: JAN/ACTUAL). Required when the
+                                      script has an operation whose association is chosen when running
             parameters (array): string array with the script parameters for possible exports/etl packages
             group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
 
@@ -2250,15 +2283,21 @@ class CorporateServer:
         script_parameters = []
         script_parameter_tokens = parameters if parameters is not None else []
 
-        # Resolve default association from period/scenario
+        # Resolve the default association from the informed period/scenario
         if period_scenario:
-            associations = self.__get_available_associations()
-            for association in associations:
-                period_ref = association.get("PeriodName")
-                scenario_ref = association.get("ScenarioName")
-                if f"{period_ref}/{scenario_ref}".upper() == period_scenario.upper():
-                    default_association_id = association.get("Id", -1)
-                    break
+            default_association_id = self.__get_default_association_id(period_scenario)
+
+        # The server rejects the execution when an operation has its association chosen when running and
+        # no valid default association is informed, so check it here to give a clear message
+        runtime_associations = self.__get_script_runtime_associations(script_id)
+        if runtime_associations['Required']:
+            allowed_associations = runtime_associations['Associations']
+            if default_association_id not in [association['Id'] for association in allowed_associations]:
+                allowed_list = ", ".join(f"{association['PeriodReference']}/{association['ScenarioReference']}" for association in allowed_associations)
+                if period_scenario:
+                    raise Exception(f"Period/scenario {period_scenario} cannot be used with script {reference}. Use one of: {allowed_list}")
+                else:
+                    raise Exception(f"Script {reference} requires a period/scenario to be executed. Inform one of: {allowed_list}")
 
         # Build ScriptParameters for each token
         if script_parameter_tokens:
@@ -2274,9 +2313,8 @@ class CorporateServer:
                 object_id = token_params[0]
                 token_params = token_params[1:]
                 object_found = False
-                etl_details = None
-                etl_details_checked = False
-                is_etl_token = ".etlx" in object_id.lower()
+                # ETL tokens start with the ETL type ("1;<file>" or "2;<server>;<database>;..."), export tokens with the export reference
+                is_etl_token = object_id.split(";")[0].strip() in ("1", "2")
 
                 for operation in script_operation_list:
                     operation_type = operation.get("OperationType")
@@ -2299,14 +2337,8 @@ class CorporateServer:
                             )
                             object_found = True
                     elif operation_type == AbmOperationType.EtlPackage and is_etl_token:
-                        # ETL operation: build details and match with operation details
-                        if not etl_details_checked:
-                            try:
-                                etl_details = self.__build_etl_details(object_id)
-                            except Exception as ex:
-                                raise ex
-                            etl_details_checked = True
-                        if etl_details is not None and etl_details.upper().strip() == operation_details.upper().strip():
+                        # ETL operation: match the ETL package named in the token with the one the operation runs
+                        if self.__etl_operation_matches(operation_details, object_id):
                             script_parameters.append(
                                 {
                                     "ScriptOperationId": operation_id,
