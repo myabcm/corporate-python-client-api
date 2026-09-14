@@ -2107,30 +2107,49 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_model_calculation_to_script(self, script_reference, period_scenario_list, script_group_reference=None):
+    def add_model_calculation_to_script(self, script_reference, period_scenario_list=None, selection_when_running=False, script_group_reference=None):
         """Add calculation operation to script
 
         Parameters:
         script_reference (string): Reference of the script where the calculation will be added
-        period_scenario_list (list): List of period/scenario references
+        period_scenario_list (list): List of period_reference/scenario_reference to be calculated.
+                                     One calculation operation is added for each association informed
+        selection_when_running (boolean): True to leave the association to be chosen when the script is executed
+                                          (the default period/scenario informed in execute_script is used).
+                                          Cannot be combined with period_scenario_list
         script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
 
         Returns:
         Nothing if calculation is added an Exception if it fails for any reason
         """
 
+        # The association list and the selection when running are mutually exclusive
+        if selection_when_running and period_scenario_list:
+            raise Exception("Error adding calculation to script. period_scenario_list cannot be informed when selection_when_running is True")
+
+        # Without one of them there is no association to calculate
+        if not selection_when_running and not period_scenario_list:
+            raise Exception("Error adding calculation to script. Inform period_scenario_list or set selection_when_running to True")
+
         if self.__console_feedback: print(f"Adding calculation to script...", end="")
 
         # Get script id
         script_id = self.__get_script_id(script_reference, script_group_reference)
 
-        # Convert period/scenario list into an association id string separated by comma
-        ps_ids = self.__get_association_list(period_scenario_list)
+        # The server reads the details of a calculation operation as a single association id, so one
+        # operation is added for each association (-1 asks for the association when the script runs)
+        if selection_when_running:
+            association_ids = [SCRIPT_ASSOCIATION_SELECTION_WHEN_RUNNING]
+        else:
+            association_ids = [self.__get_association_id(item.get('PeriodReference'), item.get('ScenarioReference'))
+                               for item in period_scenario_list]
 
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
-        body = { "Operations": [ { "OperationId": 0, "OperationType": 0, "Details": ps_ids, "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
+        operations = [ { "OperationId": 0, "OperationType": 0, "Details": str(association_id), "Name":  "", "OperationOrd": 0, "AccessRight": 0 }
+                       for association_id in association_ids ]
+        body = { "Operations": operations }
 
         # Make POST request
         response = requests.post(url, json=body, headers=self.__get_default_headers())
