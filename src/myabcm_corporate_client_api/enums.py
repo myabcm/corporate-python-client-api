@@ -38,6 +38,12 @@ class AbmDataSourceType(IntEnum):
     def has_value(cls, value):
         return value in cls._value2member_map_
 
+class AbmEtlType(IntEnum):
+    """ETL executable types"""
+    None_ = -1
+    File = 0
+    Database = 1
+
 class AbmOperationType(IntEnum):
     """Operation types"""
     Calcule = 0

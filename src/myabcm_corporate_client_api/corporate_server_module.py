@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import List, Dict
 
-from .enums import AbmFactType, LogonResult, AbmDataSourceType, AbmOperationType, AbmOperationStatus
+from .enums import AbmFactType, LogonResult, AbmDataSourceType, AbmEtlType, AbmOperationType, AbmOperationStatus
 from .error_handler import get_error_message_from_response
 import requests
 from requests.exceptions import RequestException
@@ -504,6 +504,20 @@ class CorporateServer:
         # File not found, generate exception
         raise Exception(f"File {file_name} not found for user {target_user}")
 
+    def __get_etl_executables(self):
+        # Set URL
+        url = f"{self.__base_url}/{API_VERSION}/base/etl-executables"
+
+        # Make GET request
+        response = requests.get(url, headers=self.__get_default_headers())
+
+        # Check response
+        if CorporateServer.__status_code_ok(response.status_code):
+            data = response.json()
+            return data
+        else:
+            raise Exception(f"Error getting ETL executables. Error details: {get_error_message_from_response(response.content)}")
+
     def __store_logged_user_details(self):
         # Set URL
         url = f"{self.__base_url}/{API_VERSION}/base/users/logged/profile"
@@ -682,21 +696,27 @@ class CorporateServer:
             operation_details (string): Details stored in the script operation. The server stores the fields separated
                                         by SEPARATOR_CONSTANT in this order: type, file id, server, database,
                                         integrated security, user, password and shared file name
-            etl_token (string): ETL part of the parameter ("1;FILE.etlx", "1;FILE.etlx;SHARED" or
-                                "2;server;database;integrated_security;user;password")
+            etl_token (string): ETL part of the parameter, starting with an executable id ("1;FILE.etlx",
+                                "1;FILE.etlx;SHARED" or "2;server;database;integrated_security;user;password")
 
             Returns:
             True if the operation runs that ETL package, otherwise False
         """
         etl_params = [param.strip() for param in etl_token.split(";")]
-        etl_type = etl_params[0]
+
+        # The executable tells whether the remaining fields describe a file or a database
+        if not etl_params[0].isdigit():
+            raise Exception(f"ExecutableId parameter '{etl_token}' is invalid.")
+
+        executable_id = int(etl_params[0])
+        executable_type = self.get_etl_executable_type(executable_id)
 
         # Every ETL operation stores at least the first 7 fields
         fields = [field.strip() for field in operation_details.split(SEPARATOR_CONSTANT)]
         if len(fields) < 7:
             return False
 
-        if etl_type == "1":
+        if executable_type == AbmEtlType.File:
             # ETL file: a file store file is identified by its id, a shared file by its name (eighth field)
             if len(etl_params) < 2 or etl_params[1] == "":
                 raise Exception(f"FileName parameter '{etl_token}' is invalid.")
@@ -704,14 +724,14 @@ class CorporateServer:
             file_name = etl_params[1]
             is_shared_file = (len(etl_params) == 3 and etl_params[2].upper() == "SHARED")
 
-            if fields[0] != "1":
+            if fields[0] != str(executable_id):
                 return False
             if is_shared_file:
                 return len(fields) >= 8 and fields[7].upper() == file_name.upper()
             else:
                 return fields[1] == str(self.__get_file_id(file_name))
 
-        if etl_type == "2":
+        if executable_type == AbmEtlType.Database:
             # ETL database: identified by server, database and user
             if len(etl_params) != 6:
                 raise Exception(f"Invalid parameters '{etl_token}' to EtlPackage operation.")
@@ -720,7 +740,7 @@ class CorporateServer:
             database_name = etl_params[2]
             user_name = etl_params[4]
 
-            return fields[0] == "2" and fields[2].upper() == server_name.upper() and fields[3].upper() == database_name.upper() and fields[5].upper() == user_name.upper()
+            return fields[0] == str(executable_id) and fields[2].upper() == server_name.upper() and fields[3].upper() == database_name.upper() and fields[5].upper() == user_name.upper()
 
         # Unsupported ETL type
         return False
@@ -2122,7 +2142,25 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_etlx_file_to_script(self, script_reference, etlx_filename, is_shared_file, script_group_reference=None):
+    def get_etl_executable_type(self, executable_id):
+        """Get the type of an ETL executable declared in the server's EtlConfig.xml
+
+            Parameters:
+            executable_id (integer): Id of the executable
+
+            Returns:
+            AbmEtlType.File or AbmEtlType.Database, an Exception if the server does not declare the executable
+        """
+
+        # Search for desired executable (and return its type if found)
+        for executable in self.__get_etl_executables():
+            if executable['Id'] == executable_id:
+                return executable['EtlType']
+
+        # Executable not found, generate exception
+        raise Exception(f"Executable '{executable_id}' not found.")
+
+    def add_etlx_file_to_script(self, script_reference, etlx_filename, is_shared_file, script_group_reference=None, executable_id=1):
         """Add ETLX file processing to script
 
             Parameters:
@@ -2130,6 +2168,7 @@ class CorporateServer:
             etlx_filename (string): Name of the ETLX file
             is_shared_file (boolean): True if the file is in the shared file store, False if it is in the user's file store
             script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
+            executable_id (integer, optional): Id of the file executable in the server's EtlConfig.xml. Defaults to the ETL Studio package
 
             Returns:
             Nothing if ETLX file is added an Exception if it fails for any reason
@@ -2138,11 +2177,11 @@ class CorporateServer:
         if self.__console_feedback: print(f"Adding ETLX file {etlx_filename} to script {script_reference}...", end="")
 
         if is_shared_file:
-            details = "1" + SEPARATOR_CONSTANT + "-1" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "False" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + etlx_filename + SEPARATOR_CONSTANT
+            details = str(executable_id) + SEPARATOR_CONSTANT + "-1" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "False" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + etlx_filename + SEPARATOR_CONSTANT
         else:
             # Get file id
             file_id = self.__get_file_id(etlx_filename)
-            details =  "1" + SEPARATOR_CONSTANT + str(file_id) + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "False" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT
+            details =  str(executable_id) + SEPARATOR_CONSTANT + str(file_id) + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "False" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT + "" + SEPARATOR_CONSTANT
 
         # Get script id
         script_id = self.__get_script_id(script_reference, script_group_reference)
@@ -2163,7 +2202,7 @@ class CorporateServer:
         else:
             if self.__console_feedback: print("ok")
 
-    def add_etlx_database_to_script(self, script_reference, server, database, integrated_security, username, password, script_group_reference=None):
+    def add_etlx_database_to_script(self, script_reference, server, database, integrated_security, username, password, script_group_reference=None, executable_id=2):
         """Add ETLX database processing to script
 
             Parameters:
@@ -2174,6 +2213,7 @@ class CorporateServer:
             username (string): Username
             password (string): Password
             script_group_reference (string, optional): Reference of the group (folder) that contains the script. Omit for scripts outside any group
+            executable_id (integer, optional): Id of the database executable in the server's EtlConfig.xml. Defaults to the ETL Studio package
 
             Returns:
             Nothing if ETLX database is added an Exception if it fails for any reason
@@ -2186,7 +2226,7 @@ class CorporateServer:
 
         # Set URL & parameters
         url = f"{self.__base_url}/{API_VERSION}/integration/scripts/{script_id}/operations"
-        details =  "2" + SEPARATOR_CONSTANT +  "0" + SEPARATOR_CONSTANT + server + SEPARATOR_CONSTANT +  database + SEPARATOR_CONSTANT +  str(integrated_security) + SEPARATOR_CONSTANT +  username + SEPARATOR_CONSTANT +  password + SEPARATOR_CONSTANT
+        details =  str(executable_id) + SEPARATOR_CONSTANT +  "0" + SEPARATOR_CONSTANT + server + SEPARATOR_CONSTANT +  database + SEPARATOR_CONSTANT +  str(integrated_security) + SEPARATOR_CONSTANT +  username + SEPARATOR_CONSTANT +  password + SEPARATOR_CONSTANT
 
         # OperationId, Name, OperationOrd and AccessRight properties are not used by the server and are set to 0 or empty string here
         body = { "Operations": [ { "OperationId": 0, "OperationType": 15, "Details": details, "Name":  "", "OperationOrd": 0, "AccessRight": 0 } ] }
@@ -2313,8 +2353,9 @@ class CorporateServer:
                 object_id = token_params[0]
                 token_params = token_params[1:]
                 object_found = False
-                # ETL tokens start with the ETL type ("1;<file>" or "2;<server>;<database>;..."), export tokens with the export reference
-                is_etl_token = object_id.split(";")[0].strip() in ("1", "2")
+                # ETL tokens start with an executable id ("<id>;<file>" or "<id>;<server>;<database>;..."), export
+                # tokens with the export reference. The separator keeps a numeric export reference an export token
+                is_etl_token = ";" in object_id and object_id.split(";")[0].strip().isdigit()
 
                 for operation in script_operation_list:
                     operation_type = operation.get("OperationType")

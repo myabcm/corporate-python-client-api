@@ -169,6 +169,7 @@ add_tb_cube_to_script | Add a tabular cube to a script
 add_export_to_script | Add an export to a script
 add_import_to_script | Add an import to a script
 add_model_calculation_to_script | Add a calculate model operation to a script
+get_etl_executable_type | Get the type of an ETL executable
 add_etlx_file_to_script | Add an ETLX package processing operation to a script
 add_etlx_database_to_script | Add an ETLX(Database) package processing operation to a script
 add_fact_to_script | Add a fact processing operation to a script
