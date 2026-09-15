@@ -1229,7 +1229,7 @@ class CorporateServer:
             if self.__console_feedback: print("failed")
             raise Exception(f"Failed to download {file_name}. Status code: {response.status_code}")
         else:
-            with open(f"{local_path}\\{file_name}", "wb") as file:
+            with open(os.path.join(local_path, file_name), "wb") as file:
                 file.write(response.content)
             if self.__console_feedback: print("ok")
 
