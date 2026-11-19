@@ -1398,7 +1398,7 @@ class CorporateServer:
 
         # Validate datasource_type
         if not AbmDataSourceType.has_value(datasource_type):
-            raise Exception("Invalid DataSourceType. Must be between 0 and 8")
+            raise Exception("Invalid DataSourceType. Must be between 0 and 9")
 
         # Validate datasource_parameter (based on datasource_type)
         if datasource_type == AbmDataSourceType.Excel or datasource_type == AbmDataSourceType.Access or datasource_type == AbmDataSourceType.ETL:
@@ -1423,7 +1423,7 @@ class CorporateServer:
         elif datasource_type == AbmDataSourceType.SharedFile:
             pass
 
-        # If datasource type is 2 (OLE DB), 3 (SQL Server), 4 (Oracle) or 8 (SharedFile) we just use the
+        # If datasource type is 2 (OLE DB), 3 (SQL Server), 4 (Oracle), 8 (SharedFile) or 9 (PostgreSQL) we just use the
         # datasource_parameter with no further validation
 
         # Set URL & parameters(body)
@@ -1472,8 +1472,18 @@ class CorporateServer:
             "PBPackages": parameters.get("PBPackages") if parameters.get("PBPackages") is not None else "",
             "PBItems": parameters.get("PBItems") if parameters.get("PBItems") is not None else "",
             "PBItemDimensions": parameters.get("PBItemDimensions") if parameters.get("PBItemDimensions") is not None else "",
+            # PBItemAssociations is required by v14.0.0.16864 to v14.0.0.17018 servers; newer servers ignore it
             "PBItemAssociations": parameters.get("PBItemAssociations") if parameters.get("PBItemAssociations") is not None else "",
             "PBItemDetails": parameters.get("PBItemDetails") if parameters.get("PBItemDetails") is not None else "",
+            "PBPackageAssociations": parameters.get("PBPackageAssociations") if parameters.get("PBPackageAssociations") is not None else "",
+            "PBPackageACLs": parameters.get("PBPackageACLs") if parameters.get("PBPackageACLs") is not None else "",
+            "PBItemUsers": parameters.get("PBItemUsers") if parameters.get("PBItemUsers") is not None else "",
+            "PBItemValues": parameters.get("PBItemValues") if parameters.get("PBItemValues") is not None else "",
+            "PBPremises": parameters.get("PBPremises") if parameters.get("PBPremises") is not None else "",
+            "PBPremisePeriods": parameters.get("PBPremisePeriods") if parameters.get("PBPremisePeriods") is not None else "",
+            "PBPremiseMembers": parameters.get("PBPremiseMembers") if parameters.get("PBPremiseMembers") is not None else "",
+            "PBItemComments": parameters.get("PBItemComments") if parameters.get("PBItemComments") is not None else "",
+            "PBMessages": parameters.get("PBMessages") if parameters.get("PBMessages") is not None else "",
             "AdditionalTables": parameters.get("AdditionalTables") if parameters.get("AdditionalTables") is not None else False,
             "DataReaderMode": parameters.get("DataReaderMode") if parameters.get("DataReaderMode") is not None else 1,
             "GuessingLinesCount": parameters.get("GuessingLinesCount") if parameters.get("GuessingLinesCount") is not None else 0,
@@ -1680,7 +1690,7 @@ class CorporateServer:
 
         # Validate datasource_type
         if not AbmDataSourceType.has_value(datasource_type) or datasource_type == AbmDataSourceType.Internal or datasource_type == AbmDataSourceType.DataMap:
-            raise Exception("Invalid DataSourceType. Must be either 0, 1, 2, 3, 4, 5 or 8")
+            raise Exception("Invalid DataSourceType. Must be either 0, 1, 2, 3, 4, 5, 8 or 9")
 
         # Validate datasource_parameter (based on datasource_type)
         if datasource_type == AbmDataSourceType.Excel or datasource_type == AbmDataSourceType.Access or datasource_type == AbmDataSourceType.ETL:
@@ -1690,7 +1700,7 @@ class CorporateServer:
             else:
                 raise Exception(f"File {datasource_parameter} not found in server for the current logged user")
 
-        # If datasource type is 2 (OLE DB), 3 (SQL Server), 4 (Oracle) or 8 (Shared Files), we just use the
+        # If datasource type is 2 (OLE DB), 3 (SQL Server), 4 (Oracle), 8 (Shared Files) or 9 (PostgreSQL), we just use the
         # datasource_parameter with no further validation
 
         # Set URL & parameters(body)
