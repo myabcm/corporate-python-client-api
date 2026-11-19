@@ -32,7 +32,8 @@ class AbmDataSourceType(IntEnum):
     ETL = 5,
     Internal = 6,
     DataMap = 7,
-    SharedFile = 8
+    SharedFile = 8,
+    PostgreSQL = 9
 
     @classmethod
     def has_value(cls, value):

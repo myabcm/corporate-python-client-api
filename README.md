@@ -13,6 +13,8 @@ The purpose of this package is to simplify the usage of MyABCM Corporate REST AP
 
 > 0.2.9 and newer versions support the import, export and script groups (folders) of MyABCM Corporate. Older 0.2.x versions fail against servers that have this feature.
 
+> MyABCM Corporate v14.0.0.17039 and newer require version 0.3.4 or newer of this package. With older versions, **add_import** fails with HTTP 400 against these servers because they expect the new Planning & Budget import tables (`PBPackageAssociations`, `PBPackageACLs`, `PBItemUsers`, `PBItemValues`, `PBPremises`, `PBPremisePeriods`, `PBPremiseMembers`, `PBItemComments` and `PBMessages`). All of them are optional in the **add_import** parameters dictionary. 0.3.4 also accepts the PostgreSQL data source type (9) in **add_import** and **add_export**.
+
 ## A bit of history
 
 MyABCM Corporate since its first versions, provided a REST API so users could control it from external systems/programs.
@@ -53,7 +55,7 @@ corporate_server.logoff()
 &nbsp;
 &nbsp;
 
-> This python package is designed to connect to the version **v1** of the server API, so when you inform the API URL, you must not inform the API version (as it is already embedded inside the Python code). If just for example, the "API URL" returned by **Abm.Server.WEB.Shell.exe LIST_PARAMETERS** returns ***myabcm.mycompany.com/v1***, you should use ***myabcm,mycompany.com*** without the ***v1***   
+> This python package is designed to connect to the version **v3** of the server API, so when you inform the API URL, you must not inform the API version (as it is already embedded inside the Python code). If just for example, the "API URL" returned by **Abm.Server.WEB.Shell.exe LIST_PARAMETERS** returns ***myabcm.mycompany.com/v3***, you should use ***myabcm.mycompany.com*** without the ***v3***   
 
 &nbsp;
 &nbsp;
